@@ -30,7 +30,7 @@ from ScriptGenerator import *
 if __name__ == "__main__":
 
     if not len(sys.argv) == 4:
-        print "usage: python generateVisitPbs.py trimfileName imsimConfigFile extraidFile"
+        print "usage: python generateVisitPbs.py trimfilelist_FileName imsimConfigFile extraidFile"
         quit()
 
     myfile = sys.argv[1]

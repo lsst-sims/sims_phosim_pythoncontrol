@@ -57,20 +57,21 @@ class SingleVisitScriptGenerator:
     This class generates a generic shell script.  It can be used as a superclass
     for PBS- or Exacycle-specific script generation.
     """
-    def __init__(self, scriptFileName, policy, obsHistID):
+    def __init__(self, scriptInvocationPath, scriptFileName, policy, obsHistID):
+        self.imsimHomePath = os.getenv("IMSIM_HOME_DIR")
+        self.imsimDataPath = os.getenv("CAT_SHARE_DATA")
+
+        self.scriptInvocationPath = scriptInvocationPath
         self.scriptFileName = scriptFileName
         self.policy = policy
         self.obsHistID = obsHistID
         # Map filter number to filter character
         self.filtmap = {"0":"u", "1":"g", "2":"r", "3":"i", "4":"z", "5":"y"}
         # Get ImSim version
-        versionFile = 'raytrace/version'
+        versionFile = os.path.join(self.imsimHomePath, 'raytrace/version')
         for line in open(versionFile).readlines():
             if line.startswith('Revision:'):
                 name, self.revision = line.split()
-
-        self.imsimHomePath = os.getenv("IMSIM_HOME_DIR")
-        self.imsimDataPath = os.getenv("CAT_SHARE_DATA")
 
         #
         # Get [general] config file info
@@ -110,7 +111,7 @@ class SingleVisitScriptGenerator:
 
     def writeJobCommands(self, trimfileName, trimfileBasename, trimfilePath,
                          filt, filter, obshistid, origObshistid, stagePath, extraIdFile,
-                         imsimConfigFile, visitDir):
+                         imsimConfigFile, visitDir, execFileTgzName):
 
         """
 
@@ -194,6 +195,14 @@ class SingleVisitScriptGenerator:
                 cshOut.write('cp %s/visitFiles%s-f%s.tar.gz . \n' %(stagePath, obshistid, filt))
                 cshOut.write('tar xzvf visitFiles%s-f%s.tar.gz \n' %(obshistid, filt))
                 cshOut.write('rm visitFiles%s-f%s.tar.gz \n' %(obshistid, filt))
+                #
+                # Copy execFiles from staging
+                #
+                cshOut.write('echo Copying and untarring %s to %s\n' %(execFileTgzName, visitPath))
+                cshOut.write('cp %s . \n' %(os.path.join(stagePath, execFileTgzName)))
+                cshOut.write('tar xzvf %s \n' %(execFileTgzName))
+                cshOut.write('rm %s \n' %(execFileTgzName))
+                # Set soft link to the catalog directory
                 cshOut.write('echo Setting soft link to %s directory. \n' %(scratchDataDir))
                 cshOut.write('ln -s %s/%s/ %s \n' %(scratchPath, scratchDataDir, scratchDataDir))
                 # JPG: I don't think we need to make this now, because it gets made in fullFocalPlane
@@ -231,34 +240,32 @@ class SingleVisitScriptGenerator:
 
     def tarVisitFiles(self, obshistid, filt, imsimConfigFile, extraIdFile):
         """
-
-        Make tarball of needed files for local nodes, create
-        directories on shared file system for logs and images. 
-
-        Create tar files to be copied to local nodes.  This prevents
-        IO issues with copying lots of little files from the head
-        node to the local nodes.
-
+        Make tarball of the control and param files needed on the exec nodes.
         """
-        os.chdir(self.imsimHomePath)
+
+        # We should be in the script's invocation directory
+        assert os.getcwd() == self.scriptInvocationPath
+
         visitFileTar = 'visitFiles%s-f%s.tar.gz' %(obshistid, filt)
         #visitFileGzip = '%s.gz' %(visitFileTar)
-        cmd = 'tar czvf %s ancillary/atmosphere_parameters/* ancillary/atmosphere/cloud ancillary/atmosphere/turb2d ancillary/optics_parameters/optics_parameters ancillary/optics_parameters/control ancillary/trim/trim ancillary/Add_Background/add_background ancillary/Add_Background/filter_constants* ancillary/Add_Background/fits_files ancillary/Add_Background/SEDs/*.txt ancillary/Add_Background/update_filter_constants ancillary/Add_Background/vignetting_*.txt ancillary/cosmic_rays/create_rays ancillary/cosmic_rays/iray_textfiles/iray* ancillary/e2adc/e2adc ancillary/tracking/tracking raytrace/lsst raytrace/*.txt raytrace/version raytrace/setup pbs/distributeFiles.py chip.py fullFocalplanePbs.py makePbsFiles.py %s %s' %(visitFileTar, imsimConfigFile, extraIdFile)
+        cmd = 'tar czvf %s chip.py fullFocalplanePbs.py makePbsFiles.py %s %s' %(visitFileTar, imsimConfigFile, extraIdFile)
 
-        print 'Tarring all redundant files that will be copied to the execution node(s).'
+        print 'Tarring control and param files that will be copied to the execution node(s).'
         subprocess.check_call(cmd, shell=True)
 
-        # Zip the tar file.
-        #print 'Gzipping %s file' %(visitFileTar)
-        #cmd = 'gzip %s' %(visitFileTar)
-        #subprocess.check_call(cmd, shell=True)
         return visitFileTar
+
+        
 
     def stageFiles(self, trimfileAbsName, trimfileBasename, trimfilePath,
                    filt, filter, obshistid, origObshistid, stagePath,
+                   execFileTgzName,
                    visitFileTgz, scriptFileName, scriptOutList, visitDir):
+        # We should be in the script's invocation directory
+        assert os.getcwd() == self.scriptInvocationPath
         # Move the visit and script files to stagedir.
-        print 'Moving Visit & Script Files to %s:' %(stagePath)
+        print 'Moving Exec, Visit & Script Files to %s:' %(stagePath)
+        shutil.move(execFileTgzName, stagePath)
         shutil.move(visitFileTgz, stagePath)
         shutil.move(scriptFileName, stagePath)
 
@@ -285,8 +292,9 @@ class SingleVisitScriptGenerator:
             
         # Generate the list of job scripts for the ray tracing and post processing
         fileDest = os.path.join(stagePath, scriptFileName)
-        print 'Attempting to add %s to file %s in %s' %(fileDest, scriptOutList, self.imsimHomePath)
-        os.chdir(self.imsimHomePath)
+        print 'Attempting to add %s to file %s in %s' %(fileDest, scriptOutList,
+                                                        self.scriptInvocationPath)
+        #os.chdir(self.imsimHomePath)  Now created in scriptInvocationPath
         with file(scriptOutList, 'a') as parFile:
             parFile.write('%s \n' %(fileDest))
         
@@ -294,12 +302,13 @@ class SingleVisitScriptGenerator:
 
 class SingleVisitPbsGenerator(SingleVisitScriptGenerator):
 
-    def __init__(self, scriptFileName, policy, obsHistID):
+    def __init__(self, scriptInvocationPath, scriptFileName, policy, obsHistID):
         """
         Augment the superclass's constructor because Nicole has the PBS implementation
         expecting 'scratchPath' to have the PBS 'username' appended to it.
         """
-        SingleVisitScriptGenerator.__init__(self, scriptFileName, policy, obsHistID)
+        SingleVisitScriptGenerator.__init__(self, scriptInvocationPath, scriptFileName,
+                                            policy, obsHistID)
         username = self.policy.get('pbs','username')
         self.scratchPath = os.path.join(self.policy.get('general','scratchPath'), username)
 
@@ -473,7 +482,7 @@ class SingleVisitPbsGenerator(SingleVisitScriptGenerator):
 
     def writeJobCommands(self, trimfileName, trimfileBasename, trimfilePath,
                          filt, filter, obshistid, origObshistid, stagePath, extraIdFile,
-                         imsimConfigFile, visitDir):
+                         imsimConfigFile, visitDir, execFileTgzName):
 
         """
 
@@ -575,11 +584,22 @@ class SingleVisitPbsGenerator(SingleVisitScriptGenerator):
                     popsWritePath = os.path.join(visitPath, 'pops')
                     pbsOut.write('mkdir %s \n' %(popsWritePath))
                     pbsOut.write('cp %s/*%s* %s \n' %(popsPath, origObshistid, popsWritePath))
+                #
+                # Copy visitFiles from staging
+                #
                 pbsOut.write('cp %s/visitFiles%s-f%s.tar.gz %s \n' %(stagePath, obshistid, filt, visitPath))
                 pbsOut.write('cd %s \n' %(visitPath))
                 #pbsOut.write('gunzip visitFiles%s-f%s.tar.gz \n' %(obshistid, filt))
                 pbsOut.write('tar xzvf visitFiles%s-f%s.tar.gz \n' %(obshistid, filt))
                 pbsOut.write('rm visitFiles%s-f%s.tar.gz \n' %(obshistid, filt))
+                #
+                # Copy execFiles from staging
+                #
+                pbsOut.write('echo Copying and untarring %s to %s\n' %(execFileTgzName, visitPath))
+                pbsOut.write('cp %s . \n' %(os.path.join(stagePath, execFileTgzName)))
+                pbsOut.write('tar xzvf %s \n' %(execFileTgzName))
+                pbsOut.write('rm %s \n' %(execFileTgzName))
+                # Set soft link to the catalog directory
                 pbsOut.write('echo Setting soft link to %s directory. \n' %(self.scratchDataDir))
                 pbsOut.write('ln -s %s/ %s \n' %(self.scratchDataPath, self.scratchDataDir))
                 # scratchOutputPath gets made in fullFocalPlane
@@ -643,6 +663,10 @@ class AllVisitsScriptGenerator:
     """
 
     def __init__(self, myfile, imsimConfigFile, extraIdFile):
+        # We want to track the path where the script was originally
+        # invoked because we will have to cd to other directories
+        # temporarily.
+        self.scriptInvocationPath = os.getcwd()
         self.imsimHomePath = os.getenv("IMSIM_HOME_DIR")
         if self.imsimHomePath is None:
             raise NameError('Could not find value for IMSIM_HOME_DIR.')
@@ -706,6 +730,7 @@ class AllVisitsScriptGenerator:
         actual script.
         """
         self.checkDirectories()
+        self.tarExecFiles()
         for trimfileName in self.trimfileList:
             trimfileName = trimfileName.strip()
             trimfileBasename = os.path.basename(trimfileName)
@@ -791,6 +816,28 @@ class AllVisitsScriptGenerator:
 
         
 
+    def tarExecFiles(self):
+        # None of the files in the source tree should be visit-dependent
+        # Therefore, tar it up once at the beginning for all visits
+        # NOTE TO SELF: Possibly use random file name while in source dir to
+        #               avoid collision with other script invocations.
+        os.chdir(self.imsimHomePath)
+        self.execFileTgzName = 'imsimExecFiles.tar.gz'
+        cmd = 'tar czvf %s ancillary/atmosphere_parameters/* ancillary/atmosphere/cloud ancillary/atmosphere/turb2d ancillary/optics_parameters/optics_parameters ancillary/optics_parameters/control ancillary/trim/trim ancillary/Add_Background/add_background ancillary/Add_Background/filter_constants* ancillary/Add_Background/fits_files ancillary/Add_Background/SEDs/*.txt ancillary/Add_Background/update_filter_constants ancillary/Add_Background/vignetting_*.txt ancillary/cosmic_rays/create_rays ancillary/cosmic_rays/iray_textfiles/iray* ancillary/e2adc/e2adc ancillary/tracking/tracking raytrace/lsst raytrace/*.txt raytrace/version raytrace/setup pbs/distributeFiles.py' %(self.execFileTgzName)
+        
+        print 'Tarring all exec files.'
+        subprocess.check_call(cmd, shell=True)
+
+        # Zip the tar file.
+        #print 'Gzipping %s file' %(visitFileTar)
+        #cmd = 'gzip %s' %(visitFileTar)
+        #subprocess.check_call(cmd, shell=True)
+
+        # Move the tarball to the invocation directory to minimize the time spent
+        # in the source dir.
+        shutil.copy(self.execFileTgzName, self.scriptInvocationPath)
+        # cd back to the invocation directory
+        os.chdir(self.scriptInvocationPath)
 
 
 
@@ -810,17 +857,19 @@ class AllVisitsScriptGenerator:
 
         # Make the csh script for this visit
         scriptFileName = '%s_f%s.csh' %(obshistid, filt)
-        scriptGen = SingleVisitScriptGenerator(scriptFileName, self.policy, obshistid)
+        scriptGen = SingleVisitScriptGenerator(self.scriptInvocationPath, scriptFileName,
+                                               self.policy, obshistid)
         scriptGen.writeSetupCommands(self.stagePath, visitDir)
         scriptGen.writeJobCommands(trimfileName, trimfileBasename, trimfilePath,
                                   filt, filter, obshistid, origObshistid, self.stagePath, self.extraIdFile,
-                                  self.imsimConfigFile, visitDir)
+                                  self.imsimConfigFile, visitDir, self.execFileTgzName)
         scriptGen.writeCleanupCommands(visitDir)
 
         visitFileTgz = scriptGen.tarVisitFiles(obshistid, filt, self.imsimConfigFile, self.extraIdFile)
         scriptOutList = 'genFilesToRun_%s.lis' %(self.extraIdFile)
         scriptGen.stageFiles(trimfileName, trimfileBasename, trimfilePath,
                              filt, filter, obshistid, origObshistid, self.stagePath,
+                             self.execFileTgzName,
                              visitFileTgz, scriptFileName, scriptOutList, visitDir)
 
 
@@ -853,13 +902,13 @@ class AllVisitsPbsGenerator(AllVisitsScriptGenerator):
         #      'nodedir' in some of Nicole's remaining code.
         scratchDir = os.path.join(username, visitDir)
 
-        pbsGen = SingleVisitPbsGenerator(pbsFileName, self.policy, obshistid)
+        pbsGen = SingleVisitPbsGenerator(self.scriptInvocationPath, pbsFileName, self.policy, obshistid)
         pbsGen.header(filter)
         pbsGen.logging(visitDir)
         pbsGen.setupCleanup(visitDir)
         pbsGen.writeJobCommands(trimfileName, trimfileBasename, trimfilePath,
                                filt, filter, obshistid, origObshistid, self.stagePath, self.extraIdFile,
-                               self.imsimConfigFile, visitDir)
+                               self.imsimConfigFile, visitDir, self.execFileTgzName)
         pbsGen.cleanNodeDir(visitDir)
         print "Created PBS file %s" %(pbsFileName)
 
@@ -871,6 +920,7 @@ class AllVisitsPbsGenerator(AllVisitsScriptGenerator):
         pbsOutList = 'genFilesToSubmit_%s.lis' %(self.extraIdFile)
         pbsGen.stageFiles(trimfileName, trimfileBasename, trimfilePath,
                           filt, filter, obshistid, origObshistid, self.stagePath,
+                          self.execFileTgzName,
                           visitFileTgz, pbsFileName, pbsOutList, visitDir)
 
         return
