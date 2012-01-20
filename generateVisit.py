@@ -37,7 +37,7 @@ Notes:   The script takes a list of trimfiles to run.
 
 """
 
-from ScriptGenerator import *
+from AllVisitsScriptGenerator import *
 from optparse import OptionParser
 
 if __name__ == "__main__":

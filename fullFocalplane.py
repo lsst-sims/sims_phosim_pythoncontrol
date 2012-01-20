@@ -1,4 +1,5 @@
-#!/usr/bin/env python
+#!/share/apps/lsst_gcc440/Linux64/external/python/2.5.2/bin/python
+############!/usr/bin/env python
 
 """
 Brief:   Python script to create parameter files for each stage of the Image
@@ -61,18 +62,41 @@ import os, re, sys
 import datetime
 import glob
 import math
-import random
 import shutil
 import subprocess
 import string
 import time
-import makePbsFiles
 import chip
 
 import ConfigParser
+from SingleChipScriptGenerator import *
 #import lsst.pex.policy as pexPolicy
 #import lsst.pex.logging as pexLog
 #import lsst.pex.exceptions as pexExcept
+
+class ParFileNameFactory:
+    """
+    A simple class to try to keep all the filename definitions in one place.
+    key:
+      ex  = 0 or 1
+      id  = 'R'+rx+ry+'_'+'S'+sx+sy+'_'+'E00'+ex
+
+    """
+    def time(self, obshistid, ex):
+        return 'time_%s_E00%s.pars' %(obshistid, ex) 
+    
+    def chip(self, obshistid, id):
+        return 'chip_%s_%s.pars' %(obshistid, id)
+
+    def raytrace(self, obshistid, id):
+        return 'raytracecommands_%s_%s.pars' %(obshistid, id)
+
+    def background(self, obshistid, id):
+        return 'background_%s_%s.pars' %(obshistid, id)
+
+    def cosmic(self, obshistid, id):
+        return 'cosmic_%s_%s.pars' %(obshistid, id)
+
 
 class SetupFullFocalplane:
     def __init__(self, trimfile, imsimPolicyFile, extraidFile, rx, ry, sx, sy, ex):
@@ -85,8 +109,8 @@ class SetupFullFocalplane:
         file names.  Create necessary working and save directories.
 
         """
-
-        self.imsimHomePath = os.getenv("IMSIM_HOME_DIR")
+        # Should not ever reference imsimsHomePath on exec node
+        #self.imsimHomePath = os.getenv("IMSIM_HOME_DIR")
         self.imsimDataPath = os.getenv("CAT_SHARE_DATA")
 
         self.workDir = os.getcwd()
@@ -108,22 +132,15 @@ class SetupFullFocalplane:
         self.pmem = self.policy.get('general','pmem')
         self.jobName = self.policy.get('general','jobname')
         # Directories and filenames
-        self.scratchPath = self.policy.get('general','scratchPath')
-        self.scratchOutputDir = self.policy.get('general','scratchOutputDir')
-        #self.nodeDatadir = self.policy.get('pbs','nodeDatadir') # replaced by scratchOutputDir
         self.scratchDataDir = self.policy.get('general','scratchDataDir')
-        self.scratchDataPath = os.path.join(self.scratchPath, self.scratchDataDir)
+        #self.scratchPath = self.policy.get('general','scratchPath')
+        self.scratchOutputDir = self.policy.get('general','scratchOutputDir')
         self.savePath = self.policy.get('general','saveDir')
         self.stagePath = self.policy.get('general','stagingDir')
-        self.tarball = self.policy.get('general','dataTarball')
-        # Job monitor database
-        self.useDb = self.policy.get('general','useDatabase')
 
         #
         # PBS- and LSST-specific params
         #
-	self.username = self.policy.get('pbs','username')   
-        self.catGenPath = self.policy.get('lsst','catGen')
 
 
         self.myrx = rx
@@ -134,7 +151,7 @@ class SetupFullFocalplane:
             
         print 'Using instance catalog: ', self.trimfile
         print 'Your data directory is: ', self.scratchDataDir
-        print 'Your PBS username is: ', self.username
+        #print 'Your PBS username is: ', self.username
         print '***'
         
         print 'Initializing Opsim and Instance Catalog Parameters.'
@@ -296,10 +313,6 @@ class SetupFullFocalplane:
                     pass
             print 'Your centroid directory is %s' %(self.centroidPath)
  
-        # Path to the PBS-specific JOB DIRECTORIES running on the local nodes.
-        # These are redefined for PBS
-        self.scratchPath = os.path.join(self.policy.get('general','scratchPath'), self.username)
-        print 'Your exec-node scratch Path is: ', self.scratchPath
 
         # Parameter File Names
         self.obsCatFile = 'objectcatalog_%s.pars' %(self.obshistid)
@@ -600,6 +613,7 @@ class SetupFullFocalplane:
         generated).
 
         """
+        parFactory = ParFileNameFactory()
         count = 1
         rxList = ['0', '1', '2', '3', '4']
         ryList = ['0', '1', '2', '3', '4']
@@ -722,7 +736,8 @@ class SetupFullFocalplane:
                                 if self.myex != '':
                                     exList = ['%s' %(self.myex)]
                                 for ex in exList:
-                                    timeParFile = 'time_%s_E00%s.pars' %(self.obshistid, ex) 
+                                    #timeParFile = 'time_%s_E00%s.pars' %(self.obshistid, ex) 
+                                    timeParFile = parFactory.time(self.obshistid, ex)
                                     try:
                                         os.remove(timeParFile)
                                     except:
@@ -747,7 +762,8 @@ class SetupFullFocalplane:
                                     nsy = int(sy) * 2
                                     seedchip = int(self.obsid) + nrx + nry + nsx + nsy + int(ex)
                                     
-                                    chipParFile = 'chip_%s_%s.pars' %(self.obshistid, id)
+                                    #chipParFile = 'chip_%s_%s.pars' %(self.obshistid, id)
+                                    chipParFile = parFactory.chip(self.obshistid, id)
                                     try:
                                         os.remove(chipParFile)
                                     except:
@@ -758,16 +774,20 @@ class SetupFullFocalplane:
                                     with file(chipParFile, 'a') as parFile:    
                                         parFile.write('chipid %s \n' %(cid))
                                         parFile.write('chipheightfile ../data/focal_plane/sta_misalignments/height_maps/%s.fits.gz \n' %(cid))                                        
-                                        
+
+                                    raytraceParFile   = parFactory.raytrace(self.obshistid, id)
+                                    backgroundParFile = parFactory.background(self.obshistid, id)
+                                    cosmicParFile     = parFactory.cosmic(self.obshistid, id)
                                     # GENERATE THE RAYTRACE PARS
                                     print 'Running the raytrace.'
-                                    raytraceParFile = generateRaytraceParams(self, id, chipParFile, seedchip, timeParFile)
+                                    generateRaytraceParams(self, id, chipParFile, seedchip, timeParFile,
+                                                           raytraceParFile)
                                     # GENERATE THE BACKGROUND ADDER PARS
                                     print 'Running the background.'
-                                    backgroundParFile = generateBackgroundParams(self, id, seedchip, cid, wav)
+                                    generateBackgroundParams(self, id, seedchip, cid, wav, backgroundParFile)
                                     # GENERATE THE COSMIC RAY ADDER PARS
                                     print 'Running cosmic rays.'
-                                    cosmicParFile = generateCosmicRayParams(self, id, seedchip)
+                                    generateCosmicRayParams(self, id, seedchip, cosmicParFile)
                                     # GENERATE THE ELECTRON TO ADC CONVERTER PARS
                                     print 'Running e2adc.'
                                     generateE2adcParams(self, id, cid, ex, rx, ry, sx, sy)
@@ -783,14 +803,21 @@ class SetupFullFocalplane:
                                             pass 
                                         chip.makeChipImage(self.obshistid, self.filt, rx, ry, sx, sy, ex, self.scratchOutputPath) 
                                     else:
-                                        # MAKE THE PBS SCRIPTS
-                                        print 'Making PBS Scripts.'
-                                        makePbsScripts(self, cid, id, rx, ry, sx, sy, ex, raytraceParFile, backgroundParFile, cosmicParFile, sensorId)
+                                        # MAKE THE SINGLE-CHIP SCRIPTS
+                                        print 'Making Single-Chip Scripts.'
+                                        scriptGen = SingleChipScriptGenerator_Pbs(self.policy, self.obshistid, self.filter,
+                                                                              self.filt, self.centid, self.centroidPath,
+                                                                              self.visitSavePath, self.paramDir,
+                                                                              self.trackingParFile)
+                                        scriptGen.makeScript(cid, id, rx, ry, sx, sy, ex, raytraceParFile,
+                                                             backgroundParFile, cosmicParFile, sensorId)
                                     print 'Count:', count
                                     count += 1
         return
 
-def generateRaytraceParams(self, id, chipParFile, seedchip, timeParFile):
+
+
+def generateRaytraceParams(self, id, chipParFile, seedchip, timeParFile, raytraceParFile):
     
     """
     (8) Create and return the LSST (Raytrace) parameter file.
@@ -807,20 +834,18 @@ def generateRaytraceParams(self, id, chipParFile, seedchip, timeParFile):
     if self.extraidFile != '':
         cmd = 'cat %s >> %s' %(self.extraidFile, chipParFile)
         subprocess.check_call(cmd, shell=True)
-        
-    raytraceParFile = 'raytracecommands_%s_%s.pars' %(self.obshistid, id)
+
     cmd = 'cat %s %s %s %s %s %s > %s' %(self.obsParFile, self.atmoRaytraceFile, self.opticsParFile, timeParFile, self.cloudRaytraceFile, chipParFile, raytraceParFile)
     subprocess.check_call(cmd, shell=True)
 
-    return raytraceParFile
+    return
 
-def generateBackgroundParams(self, id, seedchip, cid, wav):
+def generateBackgroundParams(self, id, seedchip, cid, wav, backgroundParFile):
 
     """
     (9) Create and return the BACKGROUND parameter file.
     """
 
-    backgroundParFile = 'background_%s_%s.pars' %(self.obshistid, id)
     try:
         os.remove(backgroundParFile)
     except:
@@ -863,15 +888,14 @@ def generateBackgroundParams(self, id, seedchip, cid, wav):
         subprocess.check_call(cmd, shell=True)
         parFile.write('add_background \n')
 
-    return backgroundParFile
+    return
 
-def generateCosmicRayParams(self, id, seedchip):
+def generateCosmicRayParams(self, id, seedchip, cosmicParFile):
 
     """
     (10) Create and return the COSMIC_RAY parameter file.
     """
 
-    cosmicParFile = 'cosmic_%s_%s.pars' %(self.obshistid, id)
     try:
         os.remove(cosmicParFile)
     except:
@@ -888,7 +912,7 @@ def generateCosmicRayParams(self, id, seedchip):
         parFile.write('seed %s \n' %(seedchip))
         parFile.write('createrays \n') 
 
-    return cosmicParFile
+    return
 
 def generateE2adcParams(self, id, cid, ex, rx, ry, sx, sy):
 
@@ -928,126 +952,6 @@ def generateE2adcParams(self, id, cid, ex, rx, ry, sx, sy):
                 parFile.write('exptime %s \n'%(self.exptime)) 
                 parFile.write('seed %s \n' %(seedamp))
                 parFile.write('e2adc \n')
-
-def makePbsScripts(self, cid, id, rx, ry, sx, sy, ex, raytraceParFile, backgroundParFile, cosmicParFile, sensorId):
-    """
-
-    (12) Make the PBS Scripts
-
-    189 pbs files per focalplane, 378 per trim file (2 snaps) if stars
-    are present on every sensor.
-
-    Each PBS script will sleep for a random time between 0-60 seconds
-    to avoid locks being set at the same time on local nodes. Using
-    the 'lockfile' command ensures that only 1 job per node executes
-    the following if-then-else code block at a time.  The '-l 1800' is
-    a safety catch where the lockfile will automatically be deleted
-    after 30 minutes.
-
-    """
-    
-    ccdId = '%s_%sf%s' %(self.obshistid, id, self.filter)
-    myRandInt = random.randint(0,60)
-    myCmdFile = 'cmds_%s_%s.txt' %(self.obshistid, id)
-    with file(myCmdFile, 'a') as cmdFile:
-        # Copy data and node files
-        #cmdFile.write('tcsh \n')
-        cmdFile.write('echo Setting up the LSST Stack, pex_logging, _exceptions, and _policy packages. \n')
-        cmdFile.write('source /share/apps/lsst_gcc440/loadLSST.csh \n')
-        cmdFile.write('echo Sleeping for %s seconds. \n' %(myRandInt))
-        cmdFile.write('sleep %s \n' %(myRandInt))
-        # Update the jobAllocator database
-        cmdFile.write('cd $PBS_O_WORKDIR \n')
-        if self.useDb == 1:
-            cmdFile.write('echo Using Job Monitor Database. \n')
-            cmdFile.write('echo Setting up LSST throughputs and catalogs_generation packages. \n')
-            cmdFile.write('setup pex_policy \n')
-            cmdFile.write('setup pex_exceptions \n')
-            cmdFile.write('setup pex_logging \n')
-            cmdFile.write('setup throughputs 1.0 \n')
-            cmdFile.write('setup catalogs_generation \n')
-            # minor setup hack necessary to allow cat_gen to work until
-            # uprev to later numpy version than what is currently (as of 4/26/11) available
-            cmdFile.write('setup pyfits \n')
-            cmdFile.write('unsetup numpy \n')
-            cmdFile.write('setup python \n')
-            cmdFile.write('python %s/python/lsst/sims/catalogs/generation/jobAllocator/myJobTracker.py %s running %s %s\n'%(self.catGenPath, self.obshistid, sensorId, self.username))
-            #cmdFile.write('python %s/python/lsst/sims/catalogs/generation/jobAllocator/myJobTracker.py %s running %s %s\n'%(self.catGenPath, self.obshistid, sensorId, self.username, self.filter))
-            cmdFile.write('echo Updated the jobAllocator database with key: RUNNING. \n')
-        else:
-            cmdFile.write('echo JobDatabase Not Updated.  Not using database. \n')
-        # Make sure your working directory on the compute node exists
-        cmdFile.write('if (-d %s ) then \n' %(self.scratchPath))
-        cmdFile.write('  cd %s \n' %(self.scratchPath))
-        cmdFile.write('else \n')
-        cmdFile.write('  mkdir %s \n' %(self.scratchPath))
-        cmdFile.write('  cd %s \n' %(self.scratchPath))
-        cmdFile.write('endif \n')
-        # Make sure the data directory and all files are present on the node.
-        # Use relative path names so we can get to the shared scratch space on all nodes.
-        # Code assumes the data directory scratchPath is scratchPath/../scratchDataDir
-        cmdFile.write('cd ../ \n')
-	cmdFile.write('echo Initializing lock file. \n')
-        cmdFile.write('lockfile -l 1800 %s.lock \n' %(self.scratchDataDir))
-        cmdFile.write('if (-d %s/starSED/wDsPT2) then \n' %(self.scratchDataPath))
-        cmdFile.write('  echo The %s directory exists! \n' %(self.scratchDataPath))
-        cmdFile.write('else \n')
-        cmdFile.write('  echo The %s directory does not exist. Removing old data dir and copying %s. \n' %(self.scratchDataDir, os.path.join(self.imsimDataPath, self.tarball)))
-        cmdFile.write('  rm -rf %s \n' %(self.scratchDataPath))
-        cmdFile.write('  cp %s . \n' %(os.path.join(self.imsimDataPath, self.tarball)))
-        cmdFile.write('  tar xzf %s \n' %(self.tarball))
-        cmdFile.write('  rm %s \n' %(self.tarball))
-        cmdFile.write('endif \n')
-        cmdFile.write('rm -f %s.lock \n' %(self.scratchDataDir))
-        cmdFile.write('echo Removed lock file and copying files for the node. \n')
-        # Copy files needed for the specific run
-        cmdFile.write('cp %s/nodeFiles%s.tar.gz %s/ \n' %(self.visitSavePath, self.obshistid, os.path.join(self.scratchPath, ccdId)))
-        # cd to the scratch exec dir (where all of the exec and param files are stored
-        # for this work unit).
-        cmdFile.write('cd %s/ \n' %(os.path.join(self.scratchPath, ccdId)))
-        cmdFile.write('tar xzf nodeFiles%s.tar.gz \n' %(self.obshistid))
-        cmdFile.write('rm nodeFiles%s.tar.gz \n' %(self.obshistid))
-        cmdFile.write('echo Setting soft link to %s directory. \n' %(self.scratchDataDir))
-        cmdFile.write('ln -s %s/ %s \n' %(self.scratchDataPath, self.scratchDataDir))
-        # Create the scratch output directory
-        cmdFile.write('if (! -d %s) then \n' %(self.scratchOutputDir))
-        cmdFile.write('   echo "Creating %s." \n' %(self.scratchOutputDir))
-        cmdFile.write('   mkdir %s \n' %(self.scratchOutputDir))
-        cmdFile.write('endif \n')
-        # Copy Files needed for LSST, Background, Cosmic Rays, & E2ADC executables
-        cmdFile.write('cd $PBS_O_WORKDIR \n')
-        cmdFile.write('echo Copying files needed for LSST stage. \n')
-        cmdFile.write('cp %s/trimcatalog_%s_%s.pars %s/%s %s/%s %s/%s/ \n' %(self.paramDir, self.obshistid, id, self.paramDir, raytraceParFile, self.paramDir, self.trackingParFile, self.scratchPath, ccdId))
-        cmdFile.write('echo Copying file needed for BACKGROUND stage. \n')
-        cmdFile.write('cp %s/%s %s/%s/ \n' %(self.paramDir, backgroundParFile, self.scratchPath, ccdId))
-        cmdFile.write('echo Copying file needed for COSMIC RAY stage. \n')
-        cmdFile.write('cp %s/%s %s/%s/ \n' %(self.paramDir, cosmicParFile, self.scratchPath, ccdId))
-        cmdFile.write('echo Copying files needed for E2ADC stage. \n')
-        cmdFile.write('cp %s/e2adc_%s_%s_*.pars %s/%s/ \n' %(self.paramDir, self.obshistid, cid, self.scratchPath, ccdId))
-        cmdFile.write('cd %s/%s \n' %(self.scratchPath, ccdId))
-        cmdFile.write('echo Running chip.py %s %s %s %s %s %s %s %s \n' %(self.obshistid, self.filt, rx, ry, sx, sy, ex, self.scratchOutputDir))
-        cmdFile.write('python chip.py %s %s %s %s %s %s %s %s \n' %(self.obshistid, self.filt, rx, ry, sx, sy, ex, self.scratchOutputDir))
-        if self.centid == '1':            
-            cmdFile.write('echo Copying centroid file to %s \n' %(self.centroidPath))
-            cmdFile.write('cp raytrace/centroid_imsim_%s_%s.txt %s \n' %(self.obshistid, id, self.centroidPath))
-        
-    # Make the PBS files, one for each CCD
-
-    #pbsFileName = 'pbs_%s_f%s_%s.pbs' %(self.obshistid, self.filter, id)
-    pbsFileName = 'pbs_%s_%s.pbs' %(self.obshistid, id)
-    nodedir = '%s/%s' %(self.username, ccdId)
-
-    makePbsFiles.header(pbsFileName, nodedir, self.policy, sensorId, self.filt)
-    makePbsFiles.logging(pbsFileName, nodedir, self.policy)
-    #makePbsFiles.setupCleanup(pbsFileName, nodedir, self.policy, sensorId, self.filter)
-    makePbsFiles.setupCleanup(pbsFileName, nodedir, self.policy, sensorId)
-    makePbsFiles.writeJobCommand(pbsFileName, myCmdFile, nodedir)
-    makePbsFiles.saveData(pbsFileName, nodedir, self.scratchOutputDir, self.filt, self.policy)
-    #makePbsFiles.cleanNodeDir(pbsFileName, nodedir, self.policy, sensorId, self.filter)
-    makePbsFiles.cleanNodeDir(pbsFileName, nodedir, self.policy, sensorId)
-    print "Created PBS file %s" %(pbsFileName)
-
-    return 
 
 def cleanUp(self):
     """
@@ -1130,6 +1034,8 @@ def cleanUp(self):
             pass
     
     return
+
+
 
 def main(trimfile, imsimPolicyFile, extraidFile, rx, ry, sx, sy, ex):
 
