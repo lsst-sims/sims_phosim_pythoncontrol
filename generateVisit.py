@@ -47,6 +47,8 @@ if __name__ == "__main__":
     parser = OptionParser(usage=usage)
     parser.add_option("-s", "--scheduler", dest="scheduler", default="shell",
                       help="Specify SCHEDULER type: shell, pbs, exacycle (default=shell)")
+    #parser.add_option("-v", "--verbose", type="int", dest="verbosity", default=0,
+    #                  help="Level of verbosity. >0 means shell scripts are run with '-x' (default=0)")
     (options, args) = parser.parse_args()
     if len(args) != 3:
         print "Incorrect number of arguments.  Use -h or --help for help."

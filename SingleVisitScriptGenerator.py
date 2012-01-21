@@ -82,6 +82,8 @@ class SingleVisitScriptGenerator:
         self.processors = self.policy.get('general','processors')
         self.pmem = self.policy.get('general','pmem')
         self.jobName = self.policy.get('general','jobname')
+        self.debugLevel = self.policy.getint('general','debuglevel')
+        self.sleepMax = self.policy.getint('general','sleepmax')
         # Directories and filenames
         self.scratchPath = self.policy.get('general','scratchPath')
         self.scratchDataDir = self.policy.get('general','scratchDataDir')
@@ -102,12 +104,15 @@ class SingleVisitScriptGenerator:
         username = getpass.getuser()
         try:
             with file(self.scriptFileName, 'a') as cshOut:
+                if self.debugLevel > 0:
+                    print >>cshOut, "/bin/csh -x"
+                else:
+                    print >>cshOut, "/bin/csh"
                 print >>cshOut, "### ---------------------------------------"
                 print >>cshOut, "### Shell script created by: %s " %(username)
                 print >>cshOut, "###              created on: %s " %(str(datetime.datetime.now()))
                 print >>cshOut, "### Running SVN imsim revision %s." %(self.revision)
                 print >>cshOut, "### ---------------------------------------"
-                print >>cshOut, "/bin/csh"
                 print >>cshOut, " "
         except IOError:
             print "Could not open %s for writing shell script" %(self.scriptFileName)
@@ -134,6 +139,10 @@ class SingleVisitScriptGenerator:
         scratchPath = self.scratchPath
         scratchDataDir = self.scratchDataDir
         stagePath = self.stagePath
+        if self.sleepMax > 0:
+            myRandInt = random.randint(0,self.sleepMax)
+        else:
+            myRandInt = 0
 
         try:
             with file(self.scriptFileName, 'a') as cshOut:
@@ -152,8 +161,8 @@ class SingleVisitScriptGenerator:
                 #cshOut.write('setup pex_policy \n')
                 #cshOut.write('setup pex_exceptions \n')
                 #cshOut.write('setup pex_logging \n')
-                #cshOut.write('echo Sleeping for %s seconds. \n' %(myRandInt))
-                #cshOut.write('sleep %s \n' %(myRandInt))
+                cshOut.write('echo Sleeping for %s seconds. \n' %(myRandInt))
+                cshOut.write('sleep %s \n' %(myRandInt))
                 #cshOut.write('cd $PBS_O_WORKDIR \n')
                 # Make sure your working directory on the compute node exists
                 cshOut.write('if (-d %s ) then \n' %(scratchPath))
@@ -355,7 +364,10 @@ class SingleVisitPbsGenerator(SingleVisitScriptGenerator):
 
         try:
             with file(self.scriptFileName, 'a') as pbsOut:
-                print >>pbsOut, "#!/bin/csh -x"
+                if self.debugLevel > 0:
+                    print >>pbsOut, "#!/bin/csh -x"
+                else:
+                    print >>pbsOut, "#!/bin/csh"
                 print >>pbsOut, "### ---------------------------------------"
                 print >>pbsOut, "### PBS script created by: %s " %(username)
                 print >>pbsOut, "### Running SVN imsim revision %s." %(self.revision)
@@ -468,7 +480,7 @@ class SingleVisitPbsGenerator(SingleVisitScriptGenerator):
         print >>pbsout, "echo ---"
         print >>pbsout, " "
         # create local directories
-        print >>pbsout, "## create local node directories (visitDir = %s)" %(visitPath)
+        print >>pbsout, "## create local node directories (visitPath = %s)" %(visitPath)
         # check if directory already exists - remember you're writing to a csh script
         print >>pbsout, "if (! -d %s) then" %(self.scratchPath)
         print >>pbsout, "  echo 'Are you sure you are on a node?'; exit 1"
@@ -526,7 +538,10 @@ class SingleVisitPbsGenerator(SingleVisitScriptGenerator):
         visitPath = os.path.join(self.scratchPath, visitDir)
         username = self.policy.get('pbs','username')
 
-        myRandInt = random.randint(0,60)
+        if self.sleepMax > 0:
+            myRandInt = random.randint(0,self.sleepMax)
+        else:
+            myRandInt = 0
 
         try:
             with file(self.scriptFileName, 'a') as pbsOut:
@@ -546,8 +561,8 @@ class SingleVisitPbsGenerator(SingleVisitScriptGenerator):
                 #pbsOut.write('setup pex_policy \n')
                 #pbsOut.write('setup pex_exceptions \n')
                 #pbsOut.write('setup pex_logging \n')
-                #pbsOut.write('echo Sleeping for %s seconds. \n' %(myRandInt))
-                #pbsOut.write('sleep %s \n' %(myRandInt))
+                pbsOut.write('echo Sleeping for %s seconds. \n' %(myRandInt))
+                pbsOut.write('sleep %s \n' %(myRandInt))
                 pbsOut.write('cd $PBS_O_WORKDIR \n')
                 # Make sure your working directory on the compute node exists
                 pbsOut.write('if (-d %s ) then \n' %(self.scratchPath))
