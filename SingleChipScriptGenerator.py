@@ -28,6 +28,11 @@ class SingleChipScriptGenerator:
     Generates the script for doing the raytracing and postprocessing steps
     for a single CCD chip.
 
+    This class is designed so that it only needs to be instantiated once per
+    LSST visit (i.e. once per call to fullFocalPlane.py).  The makeScripts()
+    method can then be called successively to generate the script for each chip
+    in the visit.
+
     """
     def __init__(self, policy, obshistid, filter, filt, centid, centroidPath,
                  visitSavePath, paramDir, trackingParFile):

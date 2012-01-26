@@ -124,45 +124,71 @@ class AllVisitsScriptGenerator:
 
     def makeScripts(self):
         """
-        Loops over trimfiles in trimfileList and calls scriptWriter to output the
-        actual script.
+        Loops over trimfiles in trimfileList and calls processTrimFile which reads
+        in the trimfile and then calls scriptGen.makeScript() to generate the actual
+        script.
         """
-        self.checkDirectories()
+        self.checkDirectories()        
+
+        # Remove the file containing the script names if it exists.
+        scriptOutList = 'visitScriptsToRun_%s.lis' %(self.extraIdFile)
+        scriptFile = os.path.join(self.scriptInvocationPath, scriptOutList)
+        if os.path.isfile(scriptFile):
+            try:
+                os.remove(scriptFile)
+            except OSError:
+                pass
+        
+        # Note that tarExecFiles() needs to be called before initializing
+        # SingleVisitScriptGenerator because it defines self.execFileTgzName
         self.tarExecFiles()
+        # SingleVisitScriptGenerator can be instantiated only once per execution environment,
+        # So initialize it here, then call the makeScript() in the loop over trim files.
+        scriptGen = SingleVisitScriptGenerator(self.scriptInvocationPath, scriptOutList, self.policy,
+                                               self.imsiConfigFile, self.extraIdFile,
+                                               self.execFileTgzName)
+        
         for trimfileName in self.trimfileList:
             trimfileName = trimfileName.strip()
-            trimfileBasename = os.path.basename(trimfileName)
-            trimfilePath = os.path.dirname(trimfileName)
-            #basename, extension = os.path.splitext(trimfileName)
+            self.processTrimFile(scriptGen, trimFileName)
+        return
 
-            for line in open(trimfileName).readlines():
-                if line.startswith('Opsim_filter'):
-                    name, filter = line.split()
-                    print 'Opsim_filter:', filter
-                if line.startswith('Opsim_obshistid'):
-                    name, obshistid = line.split()
-                    print 'Opsim_obshistid:', obshistid
 
-            ono = list(obshistid)
-            if len(ono) > 8:
-                origObshistid = '%s%s%s%s%s%s%s%s' %(ono[0], ono[1], ono[2], ono[3], ono[4],ono[5], ono[6], ono[7])
-            else:
-                origObshistid = obshistid
+    def processTrimFile(self, scriptGen, trimfileName):
+        trimfileBasename = os.path.basename(trimfileName)
+        trimfilePath = os.path.dirname(trimfileName)
+        #basename, extension = os.path.splitext(trimfileName)
 
-            # Add in extraid
-            obshistid = obshistid + self.extraid
+        for line in open(trimfileName).readlines():
+            if line.startswith('Opsim_filter'):
+                name, filter = line.split()
+                print 'Opsim_filter:', filter
+            if line.startswith('Opsim_obshistid'):
+                name, obshistid = line.split()
+                print 'Opsim_obshistid:', obshistid
 
-            # Create SAVE & LOG DIRECTORIES for this visit
-            filt = self.filtmap[filter]
-            visitDir = '%s-f%s' %(obshistid, filt)
-            visitSavePath = os.path.join(self.savePath, visitDir)
-            visitLogPath = os.path.join(visitSavePath, 'logs')
-            runName = 'run%s' %(obshistid)
-            visitParamPath = os.path.join(visitSavePath, runName)
+        ono = list(obshistid)
+        if len(ono) > 8:
+            origObshistid = '%s%s%s%s%s%s%s%s' %(ono[0], ono[1], ono[2], ono[3], ono[4],ono[5], ono[6], ono[7])
+        else:
+            origObshistid = obshistid
 
-            self.checkVisitDirectories(visitSavePath, visitLogPath, visitParamPath)
-            self.scriptWriter(trimfileName, trimfileBasename, trimfilePath, filt, filter, obshistid, origObshistid)
+        # Add in extraid
+        obshistid = obshistid + self.extraid
 
+        # Create SAVE & LOG DIRECTORIES for this visit
+        filt = self.filtmap[filter]
+        visitDir = '%s-f%s' %(obshistid, filt)
+        visitSavePath = os.path.join(self.savePath, visitDir)
+        visitLogPath = os.path.join(visitSavePath, 'logs')
+        runName = 'run%s' %(obshistid)
+        visitParamPath = os.path.join(visitSavePath, runName)
+
+        self.checkVisitDirectories(visitSavePath, visitLogPath, visitParamPath)
+        scriptGen.makeScript(obshistid, origObshistid, trimfileName, trimfileBasename,
+                             trimfilePath, filt, filter)
+        #self.scriptWriter(trimfileName, trimfileBasename, trimfilePath, filt, filter, obshistid, origObshistid)
+        return
 
     def checkDirectories(self):
         # Checks directories accessible from the client that are used for all visits
@@ -239,7 +265,7 @@ class AllVisitsScriptGenerator:
 
 
 
-    def scriptWriter(self, trimfileName, trimfileBasename, trimfilePath,
+    def scriptWriterOLD(self, trimfileName, trimfileBasename, trimfilePath,
                      filt, filter, obshistid, origObshistid):
         """
         This is called by makeScripts() and actually generates the script
@@ -286,19 +312,45 @@ class AllVisitsPbsGenerator(AllVisitsScriptGenerator):
         self.scratchPath = os.path.join(self.policy.get('general','scratchPath'), username)
 
 
-    def scriptWriter(self, trimfileName, trimfileBasename, trimfilePath,
-                     filt, filter, obshistid, origObshistid):
+    def makeScripts(self):
+        """
+        Loops over trimfiles in trimfileList and calls processTrimFile which reads
+        in the trimfile and then calls scriptGen.makeScript() to generate the actual
+        script.
+        """
+        self.checkDirectories()
 
-        username = self.policy.get('pbs','username')
+        # Remove the file containing the script names if it exists.
+        scriptOutList = 'visitScriptsToRun_%s.lis' %(self.extraIdFile)
+        scriptFile = os.path.join(self.scriptInvocationPath, scriptOutList)
+        if os.path.isfile(scriptFile):
+            try:
+                os.remove(scriptFile)
+            except OSError:
+                pass
+        
+        # Note that tarExecFiles() needs to be called before initializing
+        # SingleVisitScriptGenerator because it defines self.execFileTgzName
+        self.tarExecFiles()
+        # SingleVisitScriptGenerator can be instantiated only once per execution environment,
+        # So initialize it here, then call the makeScript() in the loop over trim files.
+        scriptGen = SingleVisitScriptGenerator_Pbs(self.scriptInvocationPath, scriptOutList, self.policy,
+                                               self.imsimConfigFile, self.extraIdFile,
+                                               self.execFileTgzName)
+        
+        for trimfileName in self.trimfileList:
+            trimfileName = trimfileName.strip()
+            self.processTrimFile(scriptGen, trimfileName)
+        return
+
+
+    def scriptWriterOLD(self, trimfileName, trimfileBasename, trimfilePath,
+                     filt, filter, obshistid, origObshistid):
 
         # Make the PBS file for this visit
         pbsFileName = '%s_f%s.pbs' %(obshistid, filt)
         # visitDir is the directory that contains info for the particular objhistid + filter
         visitDir = '%s-f%s' %(obshistid, filter)
-        # scratchDir is '$username/$visitDir' (this is confusing, so maybe get rid of the automagic
-        #      creation of the $username subdirectories for PBS).  This is often called
-        #      'nodedir' in some of Nicole's remaining code.
-        scratchDir = os.path.join(username, visitDir)
 
         pbsGen = SingleVisitPbsGenerator(self.scriptInvocationPath, pbsFileName, self.policy, obshistid)
         pbsGen.header(filter)

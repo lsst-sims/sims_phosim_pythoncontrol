@@ -56,15 +56,23 @@ class SingleVisitScriptGenerator:
     Generates a script for doing the preprocessing steps for a single obsHistID.
     This class generates a generic shell script.  It can be used as a superclass
     for PBS- or Exacycle-specific script generation.
+
+    This class is designed so that it only needs to be instantiated once unless
+    something in the .cfg file changes.  Each call to makeScript() sets all the
+    variables change per visit.
     """
-    def __init__(self, scriptInvocationPath, scriptFileName, policy, obsHistID):
+    def __init__(self, scriptInvocationPath, scriptOutList, policy, imsimConfigFile, extraIdFile, execFileTgzName):
         self.imsimHomePath = os.getenv("IMSIM_HOME_DIR")
         self.imsimDataPath = os.getenv("CAT_SHARE_DATA")
 
+        self.imsimConfigFile = imsimConfigFile
+        self.extraIdFile = extraIdFile
+        self.execFileTgzName = execFileTgzName
         self.scriptInvocationPath = scriptInvocationPath
-        self.scriptFileName = scriptFileName
+        self.scriptOutList = scriptOutList
+        #self.scriptFileName = scriptFileName
         self.policy = policy
-        self.obsHistID = obsHistID
+        #self.obsHistID = obsHistID
         # Map filter number to filter character
         self.filtmap = {"0":"u", "1":"g", "2":"r", "3":"i", "4":"z", "5":"y"}
         # Get ImSim version
@@ -93,13 +101,53 @@ class SingleVisitScriptGenerator:
         self.tarball  = self.policy.get('general','dataTarball')
         # Job monitor database
         self.useDatabase = self.policy.getboolean('general','useDatabase')
+        return
+
+    def jobFileName(self, obshistid, filt):
+        return '%s_f%s.csh' %(obshistid, filt)
+
+    def makeScript(self, obsHistID, origObsHistID, trimfileName, trimfileBasename, trimfilePath,
+                   filt, filter):
+        """
+        This creates a script to do the pre-processing for each visit.
+        
+        It calls 5 sub-methods in this class that each represent different phases of the job:
+           - writeSetupCommands
+           - writeJobCommands
+           - writeCleanupCommands
+           - tarVisitFiles
+           - stageFiles
+        
+        These can each be redefined in subclasses as needed
+        
+        To prevent conflicts between parallel workunits, the files needed for
+        each work unit are packaged in scratchPath/visitDir where 'visitDir' is defined below.
+        
+        """
+        # visitDir is the directory within scratchPath that contains info for the particular objhistid + filter
+        visitDir = '%s-f%s' %(obsHistID, filter)
+        scriptFileName = self.jobFileName(obsHistID, filt)
+        self.scriptFileName = scriptFileName   # Eventually get rid of self.scriptFileName becase it
+                                               # changes every call to makeScript()
         # Get rid of any extraneous copies of the script file in the invocation
         # directory.  These should only be there if the script aborted.
         if os.path.isfile(self.scriptFileName):
             os.remove(self.scriptFileName)
-        return
+        
 
-    def writeSetupCommands(self, stageDir, visitDir):
+        self.writeSetupCommands(visitDir, filter, obsHistID)
+        self.writeJobCommands(trimfileName, trimfileBasename, trimfilePath,
+                                  filt, filter, obsHistID, origObsHistID, visitDir)
+        self.writeCleanupCommands(visitDir, scriptFileName)
+
+        visitFileTgz = self.tarVisitFiles(obsHistID, filt)
+        self.stageFiles(trimfileName, trimfileBasename, trimfilePath,
+                        filt, filter, obsHistID, origObsHistID,
+                        visitFileTgz, scriptFileName, self.scriptOutList, visitDir)
+
+
+
+    def writeSetupCommands(self, visitDir, filter, obsHistID):
 
         username = getpass.getuser()
         try:
@@ -120,8 +168,7 @@ class SingleVisitScriptGenerator:
 
 
     def writeJobCommands(self, trimfileName, trimfileBasename, trimfilePath,
-                         filt, filter, obshistid, origObshistid, stagePath, extraIdFile,
-                         imsimConfigFile, visitDir, execFileTgzName):
+                         filt, filter, obshistid, origObshistid, visitDir):
 
         """
 
@@ -194,7 +241,7 @@ class SingleVisitScriptGenerator:
                 # Copy trimfiles from staging
                 #
                 trimfileStagePath = os.path.join(stagePath,'trimfiles', visitDir)
-                # Now copy the entire directory in trimfileOrigPath to the compute node
+                # Now copy the entire directory in trimfileStagePath to the compute node
                 cshOut.write('echo Copying %s to %s.\n' %(trimfileStagePath, scratchPath))
                 cshOut.write('cp -a %s %s\n' %(trimfileStagePath, scratchPath))
                 #
@@ -212,18 +259,18 @@ class SingleVisitScriptGenerator:
                 #
                 # Copy execFiles from staging
                 #
-                cshOut.write('echo Copying and untarring %s to %s\n' %(execFileTgzName, visitPath))
-                cshOut.write('cp %s . \n' %(os.path.join(stagePath, execFileTgzName)))
-                cshOut.write('tar xzvf %s \n' %(execFileTgzName))
-                cshOut.write('rm %s \n' %(execFileTgzName))
+                cshOut.write('echo Copying and untarring %s to %s\n' %(self.execFileTgzName, visitPath))
+                cshOut.write('cp %s . \n' %(os.path.join(stagePath, self.execFileTgzName)))
+                cshOut.write('tar xzvf %s \n' %(self.execFileTgzName))
+                cshOut.write('rm %s \n' %(self.execFileTgzName))
                 # Set soft link to the catalog directory
                 cshOut.write('echo Setting soft link to %s directory. \n' %(scratchDataDir))
                 cshOut.write('ln -s %s/%s/ %s \n' %(scratchPath, scratchDataDir, scratchDataDir))
                 # JPG: I don't think we need to make this now, because it gets made in fullFocalPlane
                 #cshOut.write('mkdir %s \n' %(nodeDataDir))
-                cshOut.write('echo Running fullFocalplane.py with %s. \n' %(extraIdFile))
+                cshOut.write('echo Running fullFocalplane.py with %s. \n' %(self.extraIdFile))
                 cshout.write('which python\n')
-                cshOut.write("python fullFocalplane.py %s %s %s '' '' '' '' ''\n" %(trimfileBasename, imsimConfigFile, extraIdFile, ))
+                cshOut.write("python fullFocalplane.py %s %s %s '' '' '' '' ''\n" %(trimfileBasename, self.imsimConfigFile, extraIdFile, ))
                 cshOut.write('cp %s_f%sJobs.lis %s \n'%(obshistid, filt, self.savePath))
 
 
@@ -241,7 +288,7 @@ class SingleVisitScriptGenerator:
         #pbsout.close()
         return
 
-    def writeCleanupCommands(self, visitDir):
+    def writeCleanupCommands(self, visitDir, scriptFileName):
 
         visitPath = os.path.join(self.scratchPath, visitDir)
         try:
@@ -249,11 +296,11 @@ class SingleVisitScriptGenerator:
                 print >>cshOut, "\n"
                 print >>cshOut, "rm -rf %s\n" %(visitPath)
         except IOError:
-            print "Could not open %s for writing header info for the shell script" %(self.scriptFileName)
+            print "Could not open %s for writing header info for the shell script" %(scriptFileName)
             sys.exit()
  
 
-    def tarVisitFiles(self, obshistid, filt, imsimConfigFile, extraIdFile):
+    def tarVisitFiles(self, obshistid, filt):
         """
         Make tarball of the control and param files needed on the exec nodes.
         """
@@ -263,7 +310,7 @@ class SingleVisitScriptGenerator:
 
         visitFileTar = 'visitFiles%s-f%s.tar.gz' %(obshistid, filt)
         #visitFileGzip = '%s.gz' %(visitFileTar)
-        cmd = 'tar czvf %s chip.py fullFocalplane.py SingleChipScriptGenerator.py %s %s' %(visitFileTar, imsimConfigFile, extraIdFile)
+        cmd = 'tar czvf %s chip.py fullFocalplane.py SingleChipScriptGenerator.py %s %s' %(visitFileTar, self.imsimConfigFile, self.extraIdFile)
 
         print 'Tarring control and param files that will be copied to the execution node(s).'
         subprocess.check_call(cmd, shell=True)
@@ -273,14 +320,14 @@ class SingleVisitScriptGenerator:
         
 
     def stageFiles(self, trimfileAbsName, trimfileBasename, trimfilePath,
-                   filt, filter, obshistid, origObshistid, stagePath,
-                   execFileTgzName,
+                   filt, filter, obshistid, origObshistid,
                    visitFileTgz, scriptFileName, scriptOutList, visitDir):
+        stagePath = self.stagePath
         # We should be in the script's invocation directory
         assert os.getcwd() == self.scriptInvocationPath
         # Move the visit and script files to stagedir.
         print 'Moving Exec, Visit & Script Files to %s:' %(stagePath)
-        shutil.move(execFileTgzName, stagePath)
+        shutil.move(self.execFileTgzName, stagePath)
         shutil.move(visitFileTgz, stagePath)
         shutil.move(scriptFileName, stagePath)
 
@@ -315,20 +362,34 @@ class SingleVisitScriptGenerator:
         
 
 
-class SingleVisitPbsGenerator(SingleVisitScriptGenerator):
+class SingleVisitScriptGenerator_Pbs(SingleVisitScriptGenerator):
 
-    def __init__(self, scriptInvocationPath, scriptFileName, policy, obsHistID):
+    def __init__(self, scriptInvocationPath, scriptOutList, policy, imsimConfigFile,
+                 extraIdFile, execFileTgzName):
         """
         Augment the superclass's constructor because Nicole has the PBS implementation
         expecting 'scratchPath' to have the PBS 'username' appended to it.
         """
-        SingleVisitScriptGenerator.__init__(self, scriptInvocationPath, scriptFileName,
-                                            policy, obsHistID)
+        SingleVisitScriptGenerator.__init__(self, scriptInvocationPath, scriptOutList, policy,
+                                             imsimConfigFile, extraIdFile, execFileTgzName)
         username = self.policy.get('pbs','username')
         self.scratchPath = os.path.join(self.policy.get('general','scratchPath'), username)
         return
 
-    def header(self, filter):
+    def jobFileName(self, obshistid, filt):
+        return '%s_f%s.pbs' %(obshistid, filt)
+
+    def writeSetupCommands(self, visitDir, filter, obsHistID):
+        """
+        PBS-specific version of writeSetupCommands.  The PBS version needs PBS-specific
+        header information and to submit another job cleanup script.
+        """
+        self.header(filter, obsHistID)
+        self.logging(visitDir)
+        self.setupCleanup(visitDir)
+        return
+
+    def header(self, filter, obshistid):
 
         """
         
@@ -337,7 +398,7 @@ class SingleVisitPbsGenerator(SingleVisitScriptGenerator):
         
         """
         policy = self.policy
-        obshistid = self.obsHistID
+        #obshistid = self.obsHistID
 
         saveDir = self.savePath
         processors = self.processors
@@ -391,6 +452,11 @@ class SingleVisitPbsGenerator(SingleVisitScriptGenerator):
                 print >>pbsOut, "### Begin Imsim Executable Sections "
                 print >>pbsOut, "### ---------------------------------------"
                 print >>pbsOut, "unalias cp "
+                pbsOut.write('echo Setting up the LSST Stack, pex_logging, _exceptions, and _policy packages. \n')
+                pbsOut.write('source /share/apps/lsst_gcc440/loadLSST.csh \n')
+                #pbsOut.write('setup pex_policy \n')
+                #pbsOut.write('setup pex_exceptions \n')
+                #pbsOut.write('setup pex_logging \n')
         except IOError:
             print "Could not open %s for writing header info for the PBS script" %(self.scriptFileName)
             sys.exit()
@@ -481,9 +547,14 @@ class SingleVisitPbsGenerator(SingleVisitScriptGenerator):
         print >>pbsout, " "
         # create local directories
         print >>pbsout, "## create local node directories (visitPath = %s)" %(visitPath)
-        # check if directory already exists - remember you're writing to a csh script
+        # check if directory already exists.  If not, then try creating it.  If it cannot
+        # be created, then maybe we are not on an exec node.
         print >>pbsout, "if (! -d %s) then" %(self.scratchPath)
-        print >>pbsout, "  echo 'Are you sure you are on a node?'; exit 1"
+        print >>pbsout, "  mkdir -p %s" %(self.scratchPath)
+        print >>pbsout, "endif"
+        print >>pbsout, "if (! -d %s) then" %(self.scratchPath)
+        print >>pbsout, "  echo 'Directory %s could not be created.'" %(self.scratchPath)
+        print >>pbsout, "  echo 'Are you sure you are on a compute node?'; exit 1"
         print >>pbsout, "endif"
         print >>pbsout, "if (! -d %s) then" %(visitPath) # see if directory exists
         print >>pbsout, "  mkdir -p %s" %(visitPath)  # make the directory (including parents)
@@ -499,8 +570,7 @@ class SingleVisitPbsGenerator(SingleVisitScriptGenerator):
         return
 
     def writeJobCommands(self, trimfileName, trimfileBasename, trimfilePath,
-                         filt, filter, obshistid, origObshistid, stagePath, extraIdFile,
-                         imsimConfigFile, visitDir, execFileTgzName):
+                         filt, filter, obshistid, origObshistid, visitDir):
 
         """
 
@@ -535,8 +605,9 @@ class SingleVisitPbsGenerator(SingleVisitScriptGenerator):
         #    print >>pbsout, "cd $PBS_O_WORKDIR"
         #myCmdFile = 'visitCmds_%s.txt' %(obshistid)
 
+        stagePath = self.stagePath
+
         visitPath = os.path.join(self.scratchPath, visitDir)
-        username = self.policy.get('pbs','username')
 
         if self.sleepMax > 0:
             myRandInt = random.randint(0,self.sleepMax)
@@ -556,14 +627,9 @@ class SingleVisitPbsGenerator(SingleVisitScriptGenerator):
                 #JPG pbsOut.write('tcsh \n')
                 pbsOut.write('setenv CAT_SHARE_DATA %s \n' %(self.imsimDataPath))
                 pbsOut.write('setenv IMSIM_HOME_DIR %s \n' %(self.imsimHomePath))
-                pbsOut.write('echo Setting up the LSST Stack, pex_logging, _exceptions, and _policy packages. \n')
-                pbsOut.write('source /share/apps/lsst_gcc440/loadLSST.csh \n')
-                #pbsOut.write('setup pex_policy \n')
-                #pbsOut.write('setup pex_exceptions \n')
-                #pbsOut.write('setup pex_logging \n')
                 pbsOut.write('echo Sleeping for %s seconds. \n' %(myRandInt))
                 pbsOut.write('sleep %s \n' %(myRandInt))
-                pbsOut.write('cd $PBS_O_WORKDIR \n')
+                #pbsOut.write('cd $PBS_O_WORKDIR \n')
                 # Make sure your working directory on the compute node exists
                 pbsOut.write('if (-d %s ) then \n' %(self.scratchPath))
                 pbsOut.write('  cd %s \n' %(self.scratchPath))
@@ -589,22 +655,32 @@ class SingleVisitPbsGenerator(SingleVisitScriptGenerator):
                 # pbsOut.write('python verifyData.py \n')
                 pbsOut.write('rm -f %s.lock \n' %(self.scratchDataDir))
                 pbsOut.write('echo Removed lock file and copying files for the node. \n')
-                pbsOut.write('cd $PBS_O_WORKDIR \n')
-                # Copy Files needed for fullFocalplane.py
-                pbsOut.write('echo Copying %s to %s.\n' %(trimfileName, visitPath))
-                pbsOut.write('cp %s %s \n' %(trimfileName, visitPath))
-                # Verify that this will always be the directory name/location
-                cmd = ('grep includeobj %s' %(trimfileName))
-                p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, close_fds=True)
-                results = p.stdout.readlines()
-                p.stdout.close()
-                nincobj = len(results)
-                if nincobj > 0:
-                    popsPath = os.path.join(trimfilePath, 'pops')
-                    pbsOut.write('echo Copying %s/*%s* files to %s.\n' %(popsPath, origObshistid, visitPath))
-                    popsWritePath = os.path.join(visitPath, 'pops')
-                    pbsOut.write('mkdir %s \n' %(popsWritePath))
-                    pbsOut.write('cp %s/*%s* %s \n' %(popsPath, origObshistid, popsWritePath))
+                
+                #
+                # Copy trimfiles from staging
+                #
+                trimfileStagePath = os.path.join(stagePath,'trimfiles', visitDir)
+                # Now copy the entire directory in trimfileStagePath to the compute node
+                pbsOut.write('echo Copying contents of %s to %s.\n' %(trimfileStagePath, visitPath))
+                pbsOut.write('cp -a %s/* %s\n' %(trimfileStagePath, visitPath))
+
+                #pbsOut.write('cd $PBS_O_WORKDIR \n')
+                ## Copy Files needed for fullFocalplane.py
+                #pbsOut.write('echo Copying %s to %s.\n' %(trimfileName, visitPath))
+                #pbsOut.write('cp %s %s \n' %(trimfileName, visitPath))
+                ## Verify that this will always be the directory name/location
+                #cmd = ('grep includeobj %s' %(trimfileName))
+                #p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, close_fds=True)
+                #results = p.stdout.readlines()
+                #p.stdout.close()
+                #nincobj = len(results)
+                #if nincobj > 0:
+                #    popsPath = os.path.join(trimfilePath, 'pops')
+                #    pbsOut.write('echo Copying %s/*%s* files to %s.\n' %(popsPath, origObshistid, visitPath))
+                #    popsWritePath = os.path.join(visitPath, 'pops')
+                #    pbsOut.write('mkdir %s \n' %(popsWritePath))
+                #    pbsOut.write('cp %s/*%s* %s \n' %(popsPath, origObshistid, popsWritePath))
+                
                 #
                 # Copy visitFiles from staging
                 #
@@ -616,19 +692,19 @@ class SingleVisitPbsGenerator(SingleVisitScriptGenerator):
                 #
                 # Copy execFiles from staging
                 #
-                pbsOut.write('echo Copying and untarring %s to %s\n' %(execFileTgzName, visitPath))
-                pbsOut.write('cp %s . \n' %(os.path.join(stagePath, execFileTgzName)))
-                pbsOut.write('tar xzvf %s \n' %(execFileTgzName))
-                pbsOut.write('rm %s \n' %(execFileTgzName))
+                pbsOut.write('echo Copying and untarring %s to %s\n' %(self.execFileTgzName, visitPath))
+                pbsOut.write('cp %s . \n' %(os.path.join(stagePath, self.execFileTgzName)))
+                pbsOut.write('tar xzvf %s \n' %(self.execFileTgzName))
+                pbsOut.write('rm %s \n' %(self.execFileTgzName))
                 # Set soft link to the catalog directory
                 pbsOut.write('echo Setting soft link to %s directory. \n' %(self.scratchDataDir))
                 pbsOut.write('ln -s %s/ %s \n' %(self.scratchDataPath, self.scratchDataDir))
                 # scratchOutputPath gets made in fullFocalPlane
                 #pbsOut.write('mkdir %s \n' %(self.scratchOutputPath))
-                pbsOut.write('echo Running fullFocalplane.py with %s. \n' %(extraIdFile))
+                pbsOut.write('echo Running fullFocalplane.py with %s. \n' %(self.extraIdFile))
                 pbsOut.write('which python\n')
-                pbsOut.write("python fullFocalplane.py %s %s %s '' '' '' '' ''\n" %(trimfileBasename, imsimConfigFile, extraIdFile, ))
-                pbsOut.write('cp %s_f%sPbsJobs.lis $PBS_O_WORKDIR \n'%(obshistid, filt))
+                pbsOut.write("python fullFocalplane.py %s %s %s '' '' '' '' ''\n" %(trimfileBasename, self.imsimConfigFile, self.extraIdFile))
+                pbsOut.write('cp %s_f%sPbsJobs.lis %s \n'%(obshistid, filt, self.savePath))
 
                 #for lines in jobinput:
                 #    print >>pbsout, "%s" %(lines)
@@ -642,7 +718,7 @@ class SingleVisitPbsGenerator(SingleVisitScriptGenerator):
         #pbsout.close()
         return
 
-    def cleanNodeDir(self, visitDir):
+    def writeCleanupCommands(self, visitDir, scriptFileName):
         """
 
         Be a good Cluster citizen...leave no trace.  Add the tcsh job
@@ -654,20 +730,20 @@ class SingleVisitPbsGenerator(SingleVisitScriptGenerator):
         visitPath = os.path.join(self.scratchPath, visitDir)
 
         try:
-            with file(self.scriptFileName, 'a') as pbsOut:
+            with file(scriptFileName, 'a') as pbsOut:
                 print >>pbsOut, "\n### ---------------------------------------"
                 print >>pbsOut, "### DELETE the local node directories and all files"
                 print >>pbsOut, "### (does not delete parent directories if created"
                 print >>pbsOut, "### ---------------------------------------\n"
                 print >>pbsOut, "echo Now deleting files in %s" %(visitPath)
-                print >>pbsOut, "/bin/rm -rf %s" %(visitPath)
+                #print >>pbsOut, "/bin/rm -rf %s" %(visitPath)
                 print >>pbsOut, "echo ---"
                 print >>pbsOut, "cd $PBS_O_WORKDIR"
                 print >>pbsOut, "echo PBS job finished at `date`"
                 print >>pbsOut, " "
                 print >>pbsOut, "###"
         except IOError:
-            print "Could not open %s for writing cleanup commands for PBS script" %(self.scriptFileName)
+            print "Could not open %s for writing cleanup commands for PBS script" %(scriptFileName)
             sys.exit()
 
         return

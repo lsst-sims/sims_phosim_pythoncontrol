@@ -613,6 +613,13 @@ class SetupFullFocalplane:
         generated).
 
         """
+        # The SingleChipScriptGenerator class is designed so that only a single instance
+        # needs to be called per execution of fullFocalPlane.py.  You can just call the
+        # makeScript() method to create a script for each chip.
+        scriptGen = SingleChipScriptGenerator_Pbs(self.policy, self.obshistid, self.filter,
+                                                  self.filt, self.centid, self.centroidPath,
+                                                  self.visitSavePath, self.paramDir,
+                                                  self.trackingParFile)
         parFactory = ParFileNameFactory()
         count = 1
         rxList = ['0', '1', '2', '3', '4']
@@ -805,10 +812,6 @@ class SetupFullFocalplane:
                                     else:
                                         # MAKE THE SINGLE-CHIP SCRIPTS
                                         print 'Making Single-Chip Scripts.'
-                                        scriptGen = SingleChipScriptGenerator_Pbs(self.policy, self.obshistid, self.filter,
-                                                                              self.filt, self.centid, self.centroidPath,
-                                                                              self.visitSavePath, self.paramDir,
-                                                                              self.trackingParFile)
                                         scriptGen.makeScript(cid, id, rx, ry, sx, sy, ex, raytraceParFile,
                                                              backgroundParFile, cosmicParFile, sensorId)
                                     print 'Count:', count
