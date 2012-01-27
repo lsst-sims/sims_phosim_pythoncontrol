@@ -27,7 +27,7 @@ Methods: 1. header: write the PBS script header info for the run
          3. setupCleanup: setup and launch the cleanup script.
             The cleanup script will cleanup crashed jobs on the node.
          4. writeJobCommands: add code command lines to the PBS script
-         5. cleanNodeDir: Copy/move all data to saveDir and delete node
+         5. cleanNodeDir: Copy/move all data to stagePath2 and delete node
             directory and all remaining data.
          6. makePbsScripts: This is the main module. It makes the
             individual instance catalog job PBS
@@ -60,7 +60,10 @@ class AllVisitsScriptGenerator:
     generators.
     """
 
-    def __init__(self, myfile, imsimConfigFile, extraIdFile):
+    def __init__(self, myfile, policy, imsimConfigFile, extraIdFile):
+
+        self.policy = policy
+
         # We want to track the path where the script was originally
         # invoked because we will have to cd to other directories
         # temporarily.
@@ -76,11 +79,6 @@ class AllVisitsScriptGenerator:
         # map filter number to filter character
         self.filtmap = {"0":"u", "1":"g", "2":"r", "3":"i", "4":"z", "5":"y"}
 
-        #
-        # Get necessary config file info
-        #
-        self.policy = ConfigParser.RawConfigParser()
-        self.policy.read(imsimConfigFile)
         #policy   = pexPolicy.Policy.createPolicy(imsimPolicy)
         # Job params
         self.numNodes = self.policy.get('general','numNodes')
@@ -90,8 +88,9 @@ class AllVisitsScriptGenerator:
         # Directories and filenames
         self.scratchPath = self.policy.get('general','scratchPath')
         self.scratchDataDir = self.policy.get('general','scratchDataDir')
-        self.savePath  = self.policy.get('general','saveDir')
-        self.stagePath  = self.policy.get('general','stagingDir')
+        self.savePath  = self.policy.get('general','savePath')
+        self.stagePath  = self.policy.get('general','stagingPath1')
+        self.stagePath2  = self.policy.get('general','stagingPath2')
         self.tarball  = self.policy.get('general','dataTarball')
         # Job monitor database
         self.useDatabase = self.policy.getboolean('general','useDatabase')
@@ -155,6 +154,7 @@ class AllVisitsScriptGenerator:
 
 
     def processTrimFile(self, scriptGen, trimfileName):
+        # trimfileName is the fully-qualified name of the trimfile we are processing
         trimfileBasename = os.path.basename(trimfileName)
         trimfilePath = os.path.dirname(trimfileName)
         #basename, extension = os.path.splitext(trimfileName)
@@ -179,65 +179,75 @@ class AllVisitsScriptGenerator:
         # Create SAVE & LOG DIRECTORIES for this visit
         filt = self.filtmap[filter]
         visitDir = '%s-f%s' %(obshistid, filt)
-        visitSavePath = os.path.join(self.savePath, visitDir)
-        visitLogPath = os.path.join(visitSavePath, 'logs')
-        runName = 'run%s' %(obshistid)
-        visitParamPath = os.path.join(visitSavePath, runName)
+        visitSavePath = os.path.join(self.stagePath2, visitDir)
+        visitLogPath = os.path.join(self.savePath, visitDir, 'logs')
+        visitParamDir = 'run%s' %(obshistid)  # Subdirectory within visitSavePath to store param files
+        trimfileStagePath = os.path.join(self.stagePath, 'trimfiles', visitDir)
 
-        self.checkVisitDirectories(visitSavePath, visitLogPath, visitParamPath)
+        self.checkVisitDirectories(visitSavePath, visitLogPath, visitParamDir, trimfileStagePath)
         scriptGen.makeScript(obshistid, origObshistid, trimfileName, trimfileBasename,
-                             trimfilePath, filt, filter)
+                             trimfilePath, filt, filter, visitDir, visitLogPath)
         #self.scriptWriter(trimfileName, trimfileBasename, trimfilePath, filt, filter, obshistid, origObshistid)
         return
 
     def checkDirectories(self):
         # Checks directories accessible from the client that are used for all visits
         stagePath = self.stagePath
-        # Remove stagePath if it exists
-        if os.path.isdir(stagePath):
-            print 'Removing %s' %(stagePath)
-            shutil.rmtree(stagePath)
-        try:
-            print 'Creating %s' %(stagePath)
-            os.makedirs(stagePath)
-        except OSError:
-            print OSError
+        # Creat stagePath if it does not exist
+        if not os.path.isdir(stagePath):
+            try:
+                print 'Creating %s' %(stagePath)
+                os.makedirs(stagePath)
+            except OSError:
+                print OSError
         # Now create trimfiles staging directory, too
         trimfileStagePath = os.path.join(stagePath, 'trimfiles')
-        print 'Creating %s' %(trimfileStagePath)
+        if not os.path.isdir(trimfileStagePath):
+            print 'Creating %s' %(trimfileStagePath)
+            try:
+                os.makedirs(trimfileStagePath)
+            except OSError:
+                print OSError
+        return
+       
+        
+    def checkVisitDirectories(self, visitSavePath, visitLogPath, visitParamDir, visitTrimfilePath):
+        # Checks the visit-specific directories accessible from the client
+        print 'Creating visit directories (and removing old ones if necessary):'
+        print '--- Checking visit save directory %s.' %(visitSavePath)
+        paramPath = os.path.join(visitSavePath, visitParamDir)
+        if os.path.isdir(visitSavePath):
+            print '------Removing visit save directory: %s' %(visitSavePath)
+            shutil.rmtree(visitSavePath)
         try:
-            os.makedirs(trimfileStagePath)
+            print '------Making visit save directory: %s' %(visitSavePath)
+            os.makedirs(visitSavePath)
+            print '------Making param subdirectory: %s' %(paramPath)
+            os.makedirs(paramPath)
         except OSError:
             print OSError
-        
-        
-    def checkVisitDirectories(self, savePath, logPath, paramDir):
-        # Checks the visit-specific directories accessible from the client
-        print 'Creating visit directories if necessary:'
-        print '--- Checking visit save directory %s.' %(savePath)
-        if not os.path.isdir(savePath):
-            try:
-                os.makedirs(savePath)
-                print '------Making visit save directory: %s' %(savePath)
-            except OSError:
-                print OSError
 
-        print '--- Checking visit log directory %s.' %(logPath)
-        if not os.path.isdir(logPath):
-            try:
-                os.makedirs(logPath)
-                print '------Making visit log directory: %s' %(logPath)
-            except OSError:
-                print OSError
+        print '--- Checking visit log directory %s.' %(visitLogPath)
+        if os.path.isdir(visitLogPath):
+            print '------Removing visit log directory: %s' %(visitLogPath)
+            shutil.rmtree(visitLogPath)
+        try:
+            os.makedirs(visitLogPath)
+            print '------Making visit log directory: %s' %(visitLogPath)
+        except OSError:
+            print OSError
 
-        print '--- Checking visit "run" directory %s.' %(paramDir)
-        if not os.path.isdir(paramDir):
-            try:
-                os.makedirs(paramDir)
-                print '------Making visit "run" directory: %s' %(paramDir)
-            except OSError:
-                print OSError
+        print '--- Checking visit trimfile stage directory %s.' %(visitTrimfilePath)
+        if os.path.isdir(visitTrimfilePath):
+            print '------Removing visit trimfile stage directory: %s' %(visitTrimfilePath)
+            shutil.rmtree(visitTrimfilePath)
+        try:
+            os.makedirs(visitTrimfilePath)
+            print '------Making visit trimfile stage directory: %s' %(visitTrimfilePath)
+        except OSError:
+            print OSError
 
+        return
         
 
     def tarExecFiles(self):
@@ -297,18 +307,21 @@ class AllVisitsScriptGenerator:
                              visitFileTgz, scriptFileName, scriptOutList, visitDir)
 
 
-class AllVisitsPbsGenerator(AllVisitsScriptGenerator):
+class AllVisitsScriptGenerator_Pbs(AllVisitsScriptGenerator):
     """
     This class redefines scriptWriter() for PBS.
     """
 
-    def __init__(self, myfile, imsimConfigFile, extraIdFile):
+    def __init__(self, myfile, policy, imsimConfigFile, extraIdFile):
         """
         Augment the superclass's constructor because Nicole has the PBS implementation
         expecting 'scratchPath' to have the PBS 'username' appended to it.
         """
-        AllVisitsScriptGenerator.__init__(self, myfile, imsimConfigFile, extraIdFile)
+        AllVisitsScriptGenerator.__init__(self, myfile, policy, imsimConfigFile, extraIdFile)
+        # Check to make sure we are the correct class for the "scheduler1" option
+        assert self.policy.get('general','scheduler1') == 'pbs'
         username = self.policy.get('pbs','username')
+        # Redefine scratchPath to include username.
         self.scratchPath = os.path.join(self.policy.get('general','scratchPath'), username)
 
 

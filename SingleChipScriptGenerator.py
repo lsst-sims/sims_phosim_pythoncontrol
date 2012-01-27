@@ -53,7 +53,7 @@ class SingleChipScriptGenerator:
 
         self.imsimDataPath = os.getenv("CAT_SHARE_DATA")
         # Directories and filenames
-        self.savePath  = self.policy.get('general','saveDir')
+        self.savePath  = self.policy.get('general','savePath')
         self.scratchPath = self.policy.get('general','scratchPath')
         self.scratchOutputDir = self.policy.get('general','scratchOutputDir')
         self.debugLevel = self.policy.getint('general','debuglevel')
@@ -76,7 +76,7 @@ class SingleChipScriptGenerator:
         
                  
     def jobFileName(self,id):
-        return 'job_%s_%s.csh' %(self.obshistid, id)
+        return 'exec_%s_%s.csh' %(self.obshistid, id)
 
     def makeScript(self, cid, id, rx, ry, sx, sy, ex, raytraceParFile, backgroundParFile, cosmicParFile, sensorId):
         """
@@ -199,8 +199,6 @@ class SingleChipScriptGenerator:
                 print >>jobFile, " "
                 # Copy data and node files
                 #jobFile.write('tcsh \n')
-                jobFile.write('echo Setting up the LSST Stack, pex_logging, _exceptions, and _policy packages. \n')
-                jobFile.write('source /share/apps/lsst_gcc440/loadLSST.csh \n')
                 jobFile.write('echo Sleeping for %s seconds. \n' %(myRandInt))
                 jobFile.write('sleep %s \n' %(myRandInt))
                 # Update the jobAllocator database
@@ -389,7 +387,7 @@ class SingleChipScriptGenerator_Pbs(SingleChipScriptGenerator):
         
 
     def jobFileName(self, id):
-        return 'pbs_%s_%s.pbs' %(self.obshistid, id)
+        return 'exec_%s_%s.pbs' %(self.obshistid, id)
 
     """
     Database methods: dbSetup and dbCleanup
@@ -522,6 +520,8 @@ class SingleChipScriptGenerator_Pbs(SingleChipScriptGenerator):
         print >>pbsout, "### ---------------------------------------"
         print >>pbsout, "### Begin Imsim Executable Sections "
         print >>pbsout, "### ---------------------------------------"
+        pbsout.write('echo Setting up the LSST Stack to get the proper version of Python. \n')
+        pbsout.write('source /share/apps/lsst_gcc440/loadLSST.csh \n')
         pbsout.close()
         return
 

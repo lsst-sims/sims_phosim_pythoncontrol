@@ -2,23 +2,23 @@
 
 """
 !!!!!!!
-NOTICE: 1/06/2012: These python scripts work *only* with trunk revision 23580!
+NOTICE: 1/06/2012: These python scripts work *only* with trunk tag v-2.2.1!
 !!!!!!!  Python control scripts have been moved from the main imsim branch
          to /sims/control/python.  For working with later revisions of ImSim,
          please work with the separate python control branch.
 
          Also note: use the newer .cfg files and not the .paf.
 
-Brief:   A Python script to generate a script for each instance
-         catalog (trimfile) - one script per visit.  This will accept multiple
-         types of scripts (e.g. shell, PBS, exacycle). Upon submission, each
-         of these scripts will be run individually on a cluster node to create
-         the necessary *.pars, *.fits and *.[pbs,csh,py] files for individual sensor
-         jobs.
-         
+Brief:   A Python script to generate a pre-processing script for each instance
+         catalog (trimfile) - one script per visit. When executing, the
+         pre-processing script will in turn generate 189 scripts for raytracing,
+         one per detector.  The flavor of each script (i.e. what scheduling
+         environment it is designed for) can be varied per-phase by setting
+         the 'scheduler1' and 'scheduler2' options.
+                  
 Usage:   python generateVisit.py [options]
-Options: fileName: Name of file containing trimfile list
-         imsimPolicyFile: Name of your policy file
+Options: trimfileListName: Name of file containing trimfile list
+         imsimConfigFile: Name of your config file (note: no longer uses LSST policy format)
          extraidFile: Name of the extraidFile to include
 
 Date:    November 30, 2011
@@ -43,10 +43,10 @@ from optparse import OptionParser
 if __name__ == "__main__":
 
 
-    usage = "usage: %prog [options] trimfileName imsimConfigFile extraidFile"
+    usage = "usage: %prog [options] trimfileListName imsimConfigFile extraidFile"
     parser = OptionParser(usage=usage)
-    parser.add_option("-s", "--scheduler", dest="scheduler", default="shell",
-                      help="Specify SCHEDULER type: shell, pbs, exacycle (default=shell)")
+    parser.add_option("-s", "--scheduler", dest="scheduler", default="unspecified",
+                      help="depricated")
     #parser.add_option("-v", "--verbose", type="int", dest="verbosity", default=0,
     #                  help="Level of verbosity. >0 means shell scripts are run with '-x' (default=0)")
     (options, args) = parser.parse_args()
@@ -60,14 +60,23 @@ if __name__ == "__main__":
 
     print "Called with myfile=%s, imsimConfigFile=%s, extraIdFile=%s" %(myfile, imsimConfigFile, extraIdFile)
 
-    if options.scheduler == 'shell':
-        scriptGenerator = AllVisitsScriptGenerator(myfile, imsimConfigFile, extraIdFile)
+    if options.scheduler != "unspecified":
+        print "--scheduler command-line option no longer supported.  Use 'scheduler1' and 'scheduler2"
+        print "  in imsimConfigFile."
+        quit()
+    # Parse the config file
+    policy = ConfigParser.RawConfigParser()
+    policy.read(imsimConfigFile)
+    # Determine the pre-processing scheduler so that we know which class to use
+    scheduler = policy.get('general','scheduler1')
+    if scheduler == 'shell':
+        scriptGenerator = AllVisitsScriptGenerator(myfile, policy, imsimConfigFile, extraIdFile)
         scriptGenerator.makeScripts()
-    elif options.scheduler == 'pbs':
-        scriptGenerator = AllVisitsPbsGenerator(myfile, imsimConfigFile, extraIdFile)
+    elif scheduler == 'pbs':
+        scriptGenerator = AllVisitsScriptGenerator_Pbs(myfile, policy, imsimConfigFile, extraIdFile)
         scriptGenerator.makeScripts()
-    elif options.scheduler == 'exacycle':
+    elif scheduler == 'exacycle':
         print "Exacycle funtionality not added yet."
         quit()
-    else:
-        print "%s is an invalid scheduler option" %(options.scheduler)
+    
+        
