@@ -343,13 +343,12 @@ class SingleVisitScriptGenerator_Pbs(SingleVisitScriptGenerator):
     def __init__(self, scriptInvocationPath, scriptOutList, policy, imsimConfigFile,
                  extraIdFile, execFileTgzName):
         """
-        Augment the superclass's constructor because Nicole has the PBS implementation
-        expecting 'scratchPath' to have the PBS 'username' appended to it.
+        Augment the superclass's constructor to have the PBS 'username' appended to it.
         """
         SingleVisitScriptGenerator.__init__(self, scriptInvocationPath, scriptOutList, policy,
                                              imsimConfigFile, extraIdFile, execFileTgzName)
         username = self.policy.get('pbs','username')
-        self.scratchPath = os.path.join(self.policy.get('general','scratchPath'), username)
+        #self.scratchPath = os.path.join(self.policy.get('general','scratchPath'), username)
         return
 
     def jobFileName(self, obshistid, filt):
@@ -372,7 +371,6 @@ class SingleVisitScriptGenerator_Pbs(SingleVisitScriptGenerator):
         jobname = self.jobName
         walltime         = policy.get('pbs','walltime')
         username         = policy.get('pbs','username')
-        scratchpartition = policy.get('general','scratchPath')
         rootEmail        = policy.get('pbs','rootEmail')
         queueTmp         = policy.get('pbs','queue')
 

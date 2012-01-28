@@ -487,7 +487,7 @@ class SingleChipScriptGenerator_Pbs(SingleChipScriptGenerator):
         print >>pbsout, "### PBS script created by: %s " %(username)
         print >>pbsout, "###              created on: %s " %(sDate)
         print >>pbsout, "### workUnitID: %s" %(wuID)
-        print >>pbsout, "### obsHistID:  %s" %(self.obsHistID)
+        print >>pbsout, "### obsHistID:  %s" %(self.obshistid)
         print >>pbsout, "### sensorID:   %s" %(sensorId)
         print >>pbsout, "### ---------------------------------------"
         #print >>pbsout, "#PBS -S /bin/tcsh"
