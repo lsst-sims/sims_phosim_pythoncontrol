@@ -68,9 +68,9 @@ class AllVisitsScriptGenerator:
         # invoked because we will have to cd to other directories
         # temporarily.
         self.scriptInvocationPath = os.getcwd()
-        self.imsimHomePath = os.getenv("IMSIM_HOME_DIR")
+        self.imsimHomePath = os.getenv("IMSIM_HOME_PATH")
         if self.imsimHomePath is None:
-            raise NameError('Could not find value for IMSIM_HOME_DIR.')
+            raise NameError('Could not find value for IMSIM_HOME_PATH.')
         self.imsimDataPath = os.getenv("CAT_SHARE_DATA")
         if self.imsimDataPath is None:
             raise NameError('Could not find value for CAT_SHARE_DATA.')
@@ -86,16 +86,14 @@ class AllVisitsScriptGenerator:
         self.pmem = self.policy.get('general','pmem')
         self.jobName = self.policy.get('general','jobname')
         # Directories and filenames
-        self.scratchPath = self.policy.get('general','scratchPath')
-        self.scratchDataDir = self.policy.get('general','scratchDataDir')
+        #self.scratchPath = self.policy.get('general','scratchExecPath')
         self.savePath  = self.policy.get('general','savePath')
-        self.stagePath  = self.policy.get('general','stagingPath1')
-        self.stagePath2  = self.policy.get('general','stagingPath2')
+        self.stagePath  = self.policy.get('general','stagePath1')
+        self.stagePath2  = self.policy.get('general','stagePath2')
         self.tarball  = self.policy.get('general','dataTarball')
         # Job monitor database
         self.useDatabase = self.policy.getboolean('general','useDatabase')
 
-        print "scratchDataDir:   %s" %(self.scratchDataDir)
         #
         # Load list of trimfiles
         #
@@ -144,12 +142,12 @@ class AllVisitsScriptGenerator:
         # SingleVisitScriptGenerator can be instantiated only once per execution environment,
         # So initialize it here, then call the makeScript() in the loop over trim files.
         scriptGen = SingleVisitScriptGenerator(self.scriptInvocationPath, scriptOutList, self.policy,
-                                               self.imsiConfigFile, self.extraIdFile,
+                                               self.imsimConfigFile, self.extraIdFile,
                                                self.execFileTgzName)
         
         for trimfileName in self.trimfileList:
             trimfileName = trimfileName.strip()
-            self.processTrimFile(scriptGen, trimFileName)
+            self.processTrimFile(scriptGen, trimfileName)
         return
 
 
@@ -314,15 +312,14 @@ class AllVisitsScriptGenerator_Pbs(AllVisitsScriptGenerator):
 
     def __init__(self, myfile, policy, imsimConfigFile, extraIdFile):
         """
-        Augment the superclass's constructor because Nicole has the PBS implementation
-        expecting 'scratchPath' to have the PBS 'username' appended to it.
+        Augmentation to the superclass's constructor to get PBS-specific 'username'.
         """
         AllVisitsScriptGenerator.__init__(self, myfile, policy, imsimConfigFile, extraIdFile)
         # Check to make sure we are the correct class for the "scheduler1" option
         assert self.policy.get('general','scheduler1') == 'pbs'
         username = self.policy.get('pbs','username')
         # Redefine scratchPath to include username.
-        self.scratchPath = os.path.join(self.policy.get('general','scratchPath'), username)
+        #self.scratchPath = os.path.join(self.policy.get('general','scratchPath'), username)
 
 
     def makeScripts(self):

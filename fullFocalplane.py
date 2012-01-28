@@ -59,7 +59,7 @@ def main(trimfile, imsimConfigFile, extraidFile, rx, ry, sx, sy, ex):
     policy.read(imsimConfigFile)
     # Determine the pre-processing scheduler so that we know which class to use
     scheduler = policy.get('general','scheduler2')
-    if scheduler == 'shell':
+    if scheduler == 'csh':
         scriptGenerator = AllChipsScriptGenerator(trimfile, policy, extraidFile, rx, ry, sx, sy, ex)
         scriptGenerator.makeScripts()
     elif scheduler == 'pbs':
@@ -68,6 +68,9 @@ def main(trimfile, imsimConfigFile, extraidFile, rx, ry, sx, sy, ex):
     elif scheduler == 'exacycle':
         print "Exacycle funtionality not added yet."
         quit()
+    else:
+        print "Scheduler '%s' unknown.  Use -h or --help for help." %(scheduler)
+    
     
     
 if __name__ == "__main__":

@@ -69,7 +69,7 @@ if __name__ == "__main__":
     policy.read(imsimConfigFile)
     # Determine the pre-processing scheduler so that we know which class to use
     scheduler = policy.get('general','scheduler1')
-    if scheduler == 'shell':
+    if scheduler == 'csh':
         scriptGenerator = AllVisitsScriptGenerator(myfile, policy, imsimConfigFile, extraIdFile)
         scriptGenerator.makeScripts()
     elif scheduler == 'pbs':
@@ -78,5 +78,7 @@ if __name__ == "__main__":
     elif scheduler == 'exacycle':
         print "Exacycle funtionality not added yet."
         quit()
+    else:
+        print "Scheduler '%s' unknown.  Use -h or --help for help." %(scheduler)
     
         

@@ -123,7 +123,7 @@ class AllChipsScriptGenerator:
 
         self.policy = policy
         # Should not ever reference imsimsHomePath on exec node
-        #self.imsimHomePath = os.getenv("IMSIM_HOME_DIR")
+        #self.imsimHomePath = os.getenv("IMSIM_HOME_PATH")
         self.imsimDataPath = os.getenv("CAT_SHARE_DATA")
 
         self.workDir = os.getcwd()
@@ -145,12 +145,11 @@ class AllChipsScriptGenerator:
         self.pmem = self.policy.get('general','pmem')
         self.jobName = self.policy.get('general','jobname')
         # Directories and filenames
-        self.scratchDataDir = self.policy.get('general','scratchDataDir')
         #self.scratchPath = self.policy.get('general','scratchPath')
         self.scratchOutputDir = self.policy.get('general','scratchOutputDir')
         self.savePath = self.policy.get('general','savePath')
-        self.stagePath = self.policy.get('general','stagingPath1')
-        self.stagePath2 = self.policy.get('general','stagingPath2')
+        self.stagePath = self.policy.get('general','stagePath1')
+        self.stagePath2 = self.policy.get('general','stagePath2')
 
         #
         # LSST-specific params
@@ -162,7 +161,6 @@ class AllChipsScriptGenerator:
         self.myex = ex
             
         print 'Using instance catalog: ', self.trimfile
-        print 'Your data directory is: ', self.scratchDataDir
         print '***'
         
         print 'Initializing Opsim and Instance Catalog Parameters.'
@@ -299,8 +297,8 @@ class AllChipsScriptGenerator:
         self.filter = filtmap[self.filt]
         visitID = '%s-f%s' %(self.obshistid, self.filter)
         # Output files from the "visit" preprocessing stage are staged to visitSavePath
-        self.visitSavePath = os.path.join(self.stagePath2, visitID)
-        self.paramDir = os.path.join(self.visitSavePath, 'run%s' %(self.obshistid))
+        self.stagePath2 = os.path.join(self.stagePath2, visitID)
+        self.paramDir = os.path.join(self.stagePath2, 'run%s' %(self.obshistid))
         # The logs go into the savePath, however.
         self.logPath = os.path.join(self.savePath, visitID, "logs")
         # NOTE: This might not be in the right location, but I never ran with self.centid==1.
@@ -317,7 +315,7 @@ class AllChipsScriptGenerator:
                 os.makedirs(self.paramDir)
             except OSError:
                 pass    
-        print 'Your parameter directory is: ', self.paramDir
+        print 'Your parameter staging directory is: ', self.paramDir
         
         if self.centid == '1':
             if not os.path.isdir(self.centroidPath):
@@ -357,7 +355,7 @@ class AllChipsScriptGenerator:
         # makeScript() method to create a script for each chip.
         scriptGen = SingleChipScriptGenerator(self.policy, self.obshistid, self.filter,
                                               self.filt, self.centid, self.centroidPath,
-                                              self.visitSavePath, self.paramDir,
+                                              self.stagePath2, self.paramDir,
                                               self.trackingParFile)
         self.loopOverChips(scriptGen, wav)
         self.cleanup()
@@ -494,7 +492,9 @@ class AllChipsScriptGenerator:
         os.chdir('ancillary/atmosphere_parameters')
         cmd = './create_atmosphere < ../../%s' %(self.atmoParFile)
         subprocess.check_call(cmd, shell=True)
-        shutil.move('%s' %(self.atmoRaytraceFile), '../../')
+        # Do a copy then remove, since shutil.copy() overwrites.
+        shutil.copy('%s' %(self.atmoRaytraceFile), '../../')
+        os.remove(self.atmoRaytraceFile)
         os.chdir('../../')
       
         return
@@ -845,7 +845,7 @@ class AllChipsScriptGenerator:
                                         # MAKE THE SINGLE-CHIP SCRIPTS
                                         print 'Making Single-Chip Scripts.'
                                         scriptGen.makeScript(cid, id, rx, ry, sx, sy, ex, raytraceParFile,
-                                                             backgroundParFile, cosmicParFile, sensorId)
+                                                             backgroundParFile, cosmicParFile, sensorId, self.logPath)
                                     print 'Count:', count
                                     count += 1
         return
@@ -1036,8 +1036,8 @@ class AllChipsScriptGenerator:
             print 'Gzipping nodeFiles%s.tar file' %(self.obshistid)
             cmd = 'gzip nodeFiles%s.tar' %(self.obshistid)
             subprocess.check_call(cmd, shell=True)
-            print 'Moving nodeFiles%s.tar.gz to %s/.' %(self.obshistid, self.visitSavePath)
-            shutil.move('nodeFiles%s.tar.gz' %(self.obshistid), '%s/' %(self.visitSavePath)) 
+            print 'Moving nodeFiles%s.tar.gz to %s/.' %(self.obshistid, self.stagePath2)
+            shutil.move('nodeFiles%s.tar.gz' %(self.obshistid), '%s/' %(self.stagePath2)) 
 
         # Move the parameter, and fits files to the run directory.
         self.cleanupFitsFiles()
@@ -1109,7 +1109,7 @@ class AllChipsScriptGenerator_Pbs(AllChipsScriptGenerator):
         # makeScript() method to create a script for each chip.
         scriptGen = SingleChipScriptGenerator_Pbs(self.policy, self.obshistid, self.filter,
                                                   self.filt, self.centid, self.centroidPath,
-                                                  self.visitSavePath, self.paramDir,
+                                                  self.stagePath2, self.paramDir,
                                                   self.trackingParFile)
         self.loopOverChips(scriptGen, wav)
         self.cleanup()
