@@ -1,5 +1,5 @@
-#!/share/apps/lsst_gcc440/Linux64/external/python/2.5.2/bin/python
-############!/usr/bin/env python
+#!/usr/bin/python
+############!/share/apps/lsst_gcc440/Linux64/external/python/2.5.2/bin/python
 
 """
 Brief:   Python script to create parameter files for each stage of the Image
@@ -23,7 +23,7 @@ Options: trimfile:    absolute path and name of the trimfile
                       to change simulator defaults (eg. turn clouds off)
 
          If running in single chip mode, you will also need the following options:
-         rx: Raft x value 
+         rx: Raft x value
          ry: Raft y value
          sx: Sensor x value
          sy: Sensor y value
@@ -55,8 +55,8 @@ Methods:  1. __init__: setup and initialization of all needed parameters and dir
 To Do:   Remove all directory dependence - use environment variables or policy file
          Need more robust verification of integrity of the SED directory on the node in the pbs script.
          Remove setup of pex* from batch script except in the case of Nicole's job monitor DB.
-         
 """
+
 from __future__ import with_statement
 import os, re, sys
 import datetime
@@ -82,8 +82,8 @@ class ParFileNameFactory:
 
     """
     def time(self, obshistid, ex):
-        return 'time_%s_E00%s.pars' %(obshistid, ex) 
-    
+        return 'time_%s_E00%s.pars' %(obshistid, ex)
+
     def chip(self, obshistid, id):
         return 'chip_%s_%s.pars' %(obshistid, id)
 
@@ -111,7 +111,7 @@ class AllChipsScriptGenerator:
     """
 
     def __init__(self, trimfile, policy, extraidFile, rx, ry, sx, sy, ex):
-        
+
         """
 
         (0) Initialize the full field instance catalog parameters and
@@ -132,7 +132,7 @@ class AllChipsScriptGenerator:
         #pexLog.Trace_setVerbosity('imsim', verbosity)
         trimfile = trimfile.strip()
         self.trimfile = trimfile
-        
+
         #
         # Get necessary config file info
         #
@@ -159,10 +159,10 @@ class AllChipsScriptGenerator:
         self.mysx = sx
         self.mysy = sy
         self.myex = ex
-            
+
         print 'Using instance catalog: ', self.trimfile
         print '***'
-        
+
         print 'Initializing Opsim and Instance Catalog Parameters.'
         for line in open(self.trimfile).readlines():
             if line.startswith('SIM_SEED'):
@@ -179,7 +179,7 @@ class AllChipsScriptGenerator:
                 print 'Opsim_moonra:', self.mra
             if line.startswith('Opsim_moondec'):
                 name, self.mdec = line.split()
-                print 'Opsim_moondec:', self.mdec    
+                print 'Opsim_moondec:', self.mdec
             if line.startswith('Opsim_rotskypos'):
                 name, self.prot = line.split()
                 print 'Opsim_rotskypos:', self.prot
@@ -243,9 +243,9 @@ class AllChipsScriptGenerator:
                     if self.extraid != '':
                         self.obshistid = self.obshistid+self.extraid
                 if line.startswith('centroidfile'):
-                    name, self.centid = line.split()           
+                    name, self.centid = line.split()
         print 'Centroid FileID:', self.centid
-        
+
         # Calculated Parameters
         tempDate = datetime.date.today()
         sDate = str(tempDate)
@@ -262,37 +262,37 @@ class AllChipsScriptGenerator:
         self.endtime = 0.5*(float(self.vistime))
         print 'EndTime:', self.endtime
         self.moonphaserad = 3.14159 - 3.14159*(float(self.moonphase))/100.0
-        print 'MoonPhase Radians:', self. moonphaserad 
+        print 'MoonPhase Radians:', self. moonphaserad
         self.sigmarawseeing = float(self.rawseeing)/2.35482
         print 'Sigma RawSeeing:', self.sigmarawseeing
         self.azim = float(self.az)
         print 'Azimuth:', self.azim
         self.zen = 90 - float(self.alt)
-        print 'Zenith:', self.zen 
+        print 'Zenith:', self.zen
         self.rrate = 15.04*math.cos(30.66*3.14159/180)*math.cos(float(self.az)*3.14159/180)/math.cos(float(self.alt)*3.14159/180)
         print 'RRate:', self.rrate
         self.sunzen = 90 - float(self.sunalt)
         print 'Sun Zenith:', self.sunzen
-       	self.minsource = int(self.minsource) 
+       	self.minsource = int(self.minsource)
 	self.minsource += 1
         self.ncat = 0
 
         # SET USEFUL DIRECTORY PATHS
-        
+
         """
 
         Make directories to store the logfiles and parameter files for
         each job.  Best practice on Minerva Cluster is to write log
         files (and data files) to a shared directory as opposed to
         writing them back to your home directory.
-        
+
         These are the paths to your SAVE, LOGS, CENTROID, and PARAMETER
         directories.  This directory holds the log files for each job,
         a small gzipped file of common data for the visit, and a
         directory with the parameter files needed for each job.
 
         """
-        
+
         filtmap = {"0":"u", "1":"g", "2":"r", "3":"i", "4":"z", "5":"y"}
         self.filter = filtmap[self.filt]
         visitID = '%s-f%s' %(self.obshistid, self.filter)
@@ -314,9 +314,9 @@ class AllChipsScriptGenerator:
             try:
                 os.makedirs(self.paramDir)
             except OSError:
-                pass    
+                pass
         print 'Your parameter staging directory is: ', self.paramDir
-        
+
         if self.centid == '1':
             if not os.path.isdir(self.centroidPath):
                 try:
@@ -324,7 +324,7 @@ class AllChipsScriptGenerator:
                 except OSError:
                     pass
             print 'Your centroid directory is %s' %(self.centroidPath)
- 
+
 
         # Parameter File Names
         self.obsCatFile = 'objectcatalog_%s.pars' %(self.obshistid)
@@ -359,7 +359,7 @@ class AllChipsScriptGenerator:
                                               self.trackingParFile)
         self.loopOverChips(scriptGen, wav)
         self.cleanup()
-        
+
 
     def writeObsCatParams(self):
 
@@ -371,10 +371,10 @@ class AllChipsScriptGenerator:
         script, most of which is new for PT1.2.
 
         """
-        
+
         print 'Writing the ObsCat Parameters File.'
         objectTestFile = 'objecttest_%s.pars' %(self.obshistid)
-        includeObjFile = 'includeobj_%s.pars' %(self.obshistid)  
+        includeObjFile = 'includeobj_%s.pars' %(self.obshistid)
 
         if os.path.isfile(self.catListFile):
             try:
@@ -427,7 +427,7 @@ class AllChipsScriptGenerator:
         results = p.stdout.readlines()
         p.stdout.close()
         nincobj = len(results)
-        
+
         if nincobj > 1:
             cmd = ('grep includeobj %s | awk -v x=%i \'{print "catalog",x,"../../"$2};{x+=1}\' >> %s' %(self.trimfile, self.ncat, self.catListFile))
             subprocess.check_call(cmd, shell=True)
@@ -450,15 +450,15 @@ class AllChipsScriptGenerator:
         except:
             #print 'WARNING: No file %s to remove - final!' %(self.obsParFile)
             pass
-        
+
         with file(self.obsParFile, 'a') as parFile:
             parFile.write('pointingra %s \n' %(self.pra))
             parFile.write('pointingdec %s \n' %(self.pdec))
             parFile.write('rotationangle %s \n' %(self.prot))
             parFile.write('spiderangle %s \n' %(self.spid))
             parFile.write('filter %s \n' %(self.filt))
-            parFile.write('zenith %s \n' %(self.zen)) 
-            parFile.write('azimuth %s \n' %(self.azim)) 
+            parFile.write('zenith %s \n' %(self.zen))
+            parFile.write('azimuth %s \n' %(self.azim))
             parFile.write('rotationrate %s \n' %(self.rrate))
             parFile.write('seddir ../data/ \n')
             parFile.write('obshistid %s \n' %(self.obshistid))
@@ -466,7 +466,7 @@ class AllChipsScriptGenerator:
             parFile.write('exptime %s \n' %(self.exptime))
 
         return
-                
+
     def generateAtmosphericParams(self):
 
         """
@@ -474,13 +474,13 @@ class AllChipsScriptGenerator:
         """
 
         print 'Writing the AtmosCat Parameters File.'
-        
+
         try:
             os.remove(self.atmoParFile)
         except:
             #print 'WARNING: No file %s to remove!' %(self.atmoParFile)
-            pass 
-        
+            pass
+
         with file(self.atmoParFile, 'a') as parFile:
             parFile.write('outputfilename %s \n' %(self.atmoRaytraceFile))
             parFile.write('monthnum %s \n' %(self.month))
@@ -488,7 +488,7 @@ class AllChipsScriptGenerator:
             parFile.write('constrainseeing %s \n' %(self.sigmarawseeing))
             parFile.write('seed %s \n'%(self.obsid))
             parFile.write('createatmosphere\n')
-            
+
         os.chdir('ancillary/atmosphere_parameters')
         cmd = './create_atmosphere < ../../%s' %(self.atmoParFile)
         subprocess.check_call(cmd, shell=True)
@@ -496,21 +496,21 @@ class AllChipsScriptGenerator:
         shutil.copy('%s' %(self.atmoRaytraceFile), '../../')
         os.remove(self.atmoRaytraceFile)
         os.chdir('../../')
-      
+
         return
 
     def generateAtmosphericScreen(self):
-        
+
         """
         (3) Create the atmosphere screens.
         """
-        
+
         print 'Generating the Atmospheric Screens.'
-    
+
         os.chdir('ancillary/atmosphere')
         screenNumber = [0,1,2,3,4,5]
         for screen in screenNumber:
-            for line in open('../../%s' %(self.atmoRaytraceFile)).readlines():    
+            for line in open('../../%s' %(self.atmoRaytraceFile)).readlines():
                 if line.startswith('outerscale %s' %(screen)):
                     name, num, out = line.split()
             print 'Outerscale: ', out
@@ -518,7 +518,7 @@ class AllChipsScriptGenerator:
             print 'Low', low
             if self.filt == '0':
                 wav = 0.36
-            elif self.filt == '1': 
+            elif self.filt == '1':
                 wav = 0.48
             elif self.filt == '2':
                 wav = 0.62
@@ -532,7 +532,7 @@ class AllChipsScriptGenerator:
             cmd = './turb2d -seed %s%s -see5 %s -outerx 50000.0 -outers %s -zenith %s -wavelength %s -name %s' %(self.obsid, screen, self.rawseeing, low, self.zen, wav, atmoScreen)
             print cmd
             subprocess.check_call(cmd, shell=True)
-            
+
             shutil.move('%s_density.fits' %(atmoScreen), '../../')
             shutil.move('%s_coarsex.fits' %(atmoScreen), '../../')
             shutil.move('%s_coarsey.fits' %(atmoScreen), '../../')
@@ -540,11 +540,11 @@ class AllChipsScriptGenerator:
             shutil.move('%s_finey.fits' %(atmoScreen), '../../')
             shutil.move('%s_mediumx.fits' %(atmoScreen), '../../')
             shutil.move('%s_mediumy.fits' %(atmoScreen), '../../')
-            with file('../../%s' %(self.atmoRaytraceFile), 'a') as parFile: 
+            with file('../../%s' %(self.atmoRaytraceFile), 'a') as parFile:
                 parFile.write('atmospherefile %s ../%s \n' %(screen, atmoScreen))
 
         os.chdir('../../')
-      
+
         return wav
 
     def generateCloudScreen(self):
@@ -553,7 +553,7 @@ class AllChipsScriptGenerator:
         (4) Create the cloud screens.
         """
         print 'Generating Cloud Screens.'
-        
+
         try:
             os.remove(self.cloudRaytraceFile)
         except:
@@ -561,10 +561,10 @@ class AllChipsScriptGenerator:
             pass
 
         os.chdir('ancillary/atmosphere')
-    
+
         screenNumber = [0, 3]
         for screen in screenNumber:
-            for line in open('../../%s' %(self.atmoRaytraceFile)).readlines():    
+            for line in open('../../%s' %(self.atmoRaytraceFile)).readlines():
                 if line.startswith('height %s' %(screen)):
                     name, num, height = line.split()
             print 'Height: ', height
@@ -576,7 +576,7 @@ class AllChipsScriptGenerator:
             with file('../../%s' %(self.cloudRaytraceFile), 'a') as parFile:
                 parFile.write('cloudfile %s ../%s \n' %(screen, cloudScreen))
         os.chdir('../..')
-      
+
         return
 
     def generateControlParams(self):
@@ -587,7 +587,7 @@ class AllChipsScriptGenerator:
 
         print 'Creating Control and Optics Parameter Files.'
         controlParFile = 'control_%s.pars' %(self.obshistid)
-        
+
         try:
             os.remove(self.controlParFile)
         except:
@@ -600,7 +600,7 @@ class AllChipsScriptGenerator:
             parFile.write('zenith %s \n' %(self.zen))
             parFile.write('ranseed %s \n' %(self.obsid))
             parFile.write('optics_parameters \n')
-            
+
         os.chdir('ancillary/optics_parameters')
         cmd = './optics_parameters < ../../%s' %(controlParFile)
         subprocess.check_call(cmd, shell=True)
@@ -620,7 +620,7 @@ class AllChipsScriptGenerator:
         """
         print 'Creating Tracking Parameter Files.'
         trackParFile = 'track_%s.pars' %(self.obshistid)
-        
+
         try:
             os.remove(trackParFile)
         except:
@@ -643,7 +643,7 @@ class AllChipsScriptGenerator:
         return
 
     def loopOverChips(self, scriptGen, wav):
-    
+
         """
 
         (7) Trim Program: Create the parameter files for each chip for
@@ -681,7 +681,7 @@ class AllChipsScriptGenerator:
                     except:
                         #print 'WARNING: No file %s to remove!' %(trimParFile)
                         pass
-                        
+
                     with file(trimParFile, 'a') as parFile:
                         parFile.write('ncatalog %s \n' %(self.ncat))
 
@@ -709,7 +709,7 @@ class AllChipsScriptGenerator:
                         ntrims = 1
                     else:
                         ntrims = 9
-                        
+
                     with file(trimParFile, 'a') as parFile:
                         parFile.write('ntrim %s \n' %(ntrims))
                         parFile.write('point_ra %s \n' %(self.pra))
@@ -737,7 +737,7 @@ class AllChipsScriptGenerator:
                             trimCatFile = 'trimcatalog_%s_%s.pars' %(self.obshistid, cid)
                             with file(trimCatFile, 'a') as parFile:
                                 parFile.write('lsst \n')
-                                
+
                             shutil.move('%s' %(trimCatFile), '../..')
                             print 'Finished writing trimcatalog file %s.' %(trimCatFile)
 
@@ -747,12 +747,12 @@ class AllChipsScriptGenerator:
                     except:
                         #print 'WARNING: No file %s to remove!' %(trimParFile)
                         pass
-                    
+
                     sxList = ['0', '1', '2']
                     syList = ['0', '1', '2']
                     if self.mysx != '':
                         sxList = ['%s' %(self.mysx)]
-                        syList = ['%s' %(self.mysy)]                    
+                        syList = ['%s' %(self.mysy)]
                     for sx in sxList:
                         for sy in syList:
                             cid = 'R'+rx+ry+'_'+'S'+sx+sy
@@ -763,19 +763,19 @@ class AllChipsScriptGenerator:
                             # MINSOURCE=0 in trimfile header will produce background-only images.
                             # if numLines > 0: # creates script for the sensor designated by cid
                             if numLines > self.minsource:
-                            
+
                                 newTrimCatFile01 = 'trimcatalog_%s_%s_E001.pars' %(self.obshistid, cid)
                                 newTrimCatFile00 = 'trimcatalog_%s_%s_E000.pars' %(self.obshistid, cid)
                                 shutil.copyfile(trimCatFile, newTrimCatFile01)
                                 shutil.copyfile(trimCatFile, newTrimCatFile00)
-                                
+
                                 # LOOP OVER EXPOSURES
                                 print 'Looping over Exposures'
                                 exList = ['0', '1']
                                 if self.myex != '':
                                     exList = ['%s' %(self.myex)]
                                 for ex in exList:
-                                    #timeParFile = 'time_%s_E00%s.pars' %(self.obshistid, ex) 
+                                    #timeParFile = 'time_%s_E00%s.pars' %(self.obshistid, ex)
                                     timeParFile = parFactory.time(self.obshistid, ex)
                                     try:
                                         os.remove(timeParFile)
@@ -789,18 +789,18 @@ class AllChipsScriptGenerator:
                                     else:
                                         with file(timeParFile, 'a') as parFile:
                                             parFile.write('timeoffset %s \n' %(self.timeoff))
-                            
+
                                     with file(timeParFile, 'a') as parFile:
                                         parFile.write('pairid %s \n' %(ex))
 
                                     id  = 'R'+rx+ry+'_'+'S'+sx+sy+'_'+'E00'+ex
-    
+
                                     nrx = int(rx) * 90
                                     nry = int(ry) * 18
                                     nsx = int(sx) * 6
                                     nsy = int(sy) * 2
                                     seedchip = int(self.obsid) + nrx + nry + nsx + nsy + int(ex)
-                                    
+
                                     #chipParFile = 'chip_%s_%s.pars' %(self.obshistid, id)
                                     chipParFile = parFactory.chip(self.obshistid, id)
                                     try:
@@ -810,9 +810,9 @@ class AllChipsScriptGenerator:
                                         pass
 
                                     shutil.copyfile('data/focal_plane/sta_misalignments/offsets/pars_%s' %(cid), chipParFile)
-                                    with file(chipParFile, 'a') as parFile:    
+                                    with file(chipParFile, 'a') as parFile:
                                         parFile.write('chipid %s \n' %(cid))
-                                        parFile.write('chipheightfile ../data/focal_plane/sta_misalignments/height_maps/%s.fits.gz \n' %(cid))                                        
+                                        parFile.write('chipheightfile ../data/focal_plane/sta_misalignments/height_maps/%s.fits.gz \n' %(cid))
 
                                     raytraceParFile   = parFactory.raytrace(self.obshistid, id)
                                     backgroundParFile = parFactory.background(self.obshistid, id)
@@ -832,15 +832,15 @@ class AllChipsScriptGenerator:
                                     self.generateE2adcParams(id, cid, ex, rx, ry, sx, sy)
                                     #jId = self.obshistid + ex + str(count)
                                     #jobId = int(jId)
-        
+
                                     sensorId  = rx+ry+'_'+sx+sy+'_'+ex
                                     if self.myrx !='':
                                         try:
                                             os.mkdir(self.scratchOutputDir)
                                         except:
-                                            print 'WARNING: Directory %s already exists!' %(self.scratchOutputDir) 
-                                            pass 
-                                        chip.makeChipImage(self.obshistid, self.filt, rx, ry, sx, sy, ex, self.scratchOutputPath) 
+                                            print 'WARNING: Directory %s already exists!' %(self.scratchOutputDir)
+                                            pass
+                                        chip.makeChipImage(self.obshistid, self.filt, rx, ry, sx, sy, ex, self.scratchOutputPath)
                                     else:
                                         # MAKE THE SINGLE-CHIP SCRIPTS
                                         print 'Making Single-Chip Scripts.'
@@ -984,7 +984,7 @@ class AllChipsScriptGenerator:
                     parFile.write('chipid %s \n' %(cid))
                     parFile.write('chipoutid R%s%s_S%s%s_C%s%s \n' %(rx, ry, sx, sy, ax, ay))
                     parFile.write('qemapfilename ../../data/focal_plane/sta_misalignments/qe_maps/QE_R%s%s_S%s%s.fits.gz \n' %(rx, ry, sx, sy))
-                    parFile.write('exptime %s \n'%(self.exptime)) 
+                    parFile.write('exptime %s \n'%(self.exptime))
                     parFile.write('seed %s \n' %(seedamp))
                     parFile.write('e2adc \n')
 
@@ -998,7 +998,7 @@ class AllChipsScriptGenerator:
 
         """
 
-        if self.myrx == '':        
+        if self.myrx == '':
             # Create tar file to be copied to local nodes.  This prevents
             # IO issues with copying lots of little files from the head
             # node to the local nodes.  Only create the tar file if not
@@ -1071,8 +1071,8 @@ class AllChipsScriptGenerator:
         except:
             print 'WARNING: No command files to remove!'
             pass
-        
-        
+
+
         try:
             cmd = 'ls %s/*.csh > %s_f%sJobs.lis' %(self.paramDir, self.obshistid, self.filter)
             subprocess.check_call(cmd,shell=True)
@@ -1082,7 +1082,7 @@ class AllChipsScriptGenerator:
             print 'WARNING: No shell script files to list!'
             pass
         return
-        
+
 
 
 class AllChipsScriptGenerator_Pbs(AllChipsScriptGenerator):
@@ -1092,7 +1092,7 @@ class AllChipsScriptGenerator_Pbs(AllChipsScriptGenerator):
         self.username = self.policy.get('pbs','username')
         print 'Your PBS username is: ', self.username
         return
-    
+
     def makeScripts(self):
         """
         This is the main worker routine.  It just goes through and calls
@@ -1136,4 +1136,3 @@ class AllChipsScriptGenerator_Pbs(AllChipsScriptGenerator):
         except:
             print 'WARNING: No PBS files to list!'
             pass
-        

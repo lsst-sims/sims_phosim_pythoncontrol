@@ -1,4 +1,5 @@
-#!/share/apps/lsst_gcc440/Linux64/external/python/2.5.2/bin/python
+#!/usr/bin/python
+###################!/share/apps/lsst_gcc440/Linux64/external/python/2.5.2/bin/python
 
 """
 Brief:   Python script to generate a PBS file for each instance
@@ -6,7 +7,7 @@ Brief:   Python script to generate a PBS file for each instance
          of these scripts will be run individually on a cluster node to create
          the necessary *.pars, *.fits and *.pbs files for individual sensor
          jobs.
-         
+
 Usage:   python generateVisitPbs.py [options]
 Options: fileName: Name of file containing trimfile list
          imsimPolicyFile: Name of your policy file
@@ -18,7 +19,7 @@ Authors: Nicole Silvestri, U. Washington, nms@astro.washington.edu
 Updated: November 30, 2011 JPG: Removed dependency on LSST stack by swapping
                                 LSST policy file with Python ConfigParser
 
-Notes:   The script takes a list of trimfiles to run.  
+Notes:   The script takes a list of trimfiles to run.
          The extraidFile is the name of an additional file used to change the
          default imsim parameters (eg. to turn clouds off, create centroid files, etc).
 
@@ -113,7 +114,7 @@ class SingleVisitScriptGenerator(AbstractScriptGenerator):
                    filt, filter, visitDir, visitLogPath):
         """
         This creates a script to do the pre-processing for each visit.
-        
+
         It calls 8 sub-methods in this class that each represent different phases of the job
         (* indicates these are defined in AbstractScriptGenerator):
            - writeHeader            Write script header
@@ -124,21 +125,21 @@ class SingleVisitScriptGenerator(AbstractScriptGenerator):
            - writeCleanupCommands*  Write the commands to cleanup
            - tarVisitFiles          Tar the visit files that will be staged to the exec node
            - stageFiles             Stage files from submit node to exec node
-        
+
         These can each be redefined in subclasses as needed
-        
+
         To prevent conflicts between parallel workunits, the files needed for
         each work unit are packaged in scratchPath/visitDir where 'visitDir'
         is the directory within scratchPath that contains info for the particular
         objhistid + filter
-        
+
         """
         scriptFileName = self.jobFileName(obsHistID, filt)
         # Get rid of any extraneous copies of the script file in the invocation
         # directory.  These should only be there if the script aborted.
         if os.path.isfile(scriptFileName):
             os.remove(scriptFileName)
-        
+
 
         self.writeHeader(scriptFileName, visitDir, filter, obsHistID, visitLogPath)
         self.writeSetupExecDirs(scriptFileName, visitDir)
@@ -285,7 +286,7 @@ class SingleVisitScriptGenerator(AbstractScriptGenerator):
 
         return visitFileTar
 
-        
+
 
     def stageFiles(self, trimfileAbsName, trimfileBasename, trimfilePath,
                    filt, filter, obshistid, origObshistid,
@@ -303,7 +304,7 @@ class SingleVisitScriptGenerator(AbstractScriptGenerator):
         shutil.copy(scriptFileName, stagePath)
         os.remove(scriptFileName)
         os.chmod(os.path.join(stagePath,scriptFileName), 0775)
-        
+
 
         # Also stage the trimfiles to stagePath/visitDir/trimfiles/
         trimfileStagePath = os.path.join(stagePath, 'trimfiles', visitDir)
@@ -318,7 +319,7 @@ class SingleVisitScriptGenerator(AbstractScriptGenerator):
         results = p.stdout.readlines()
         p.stdout.close()
         nincobj = len(results)
-        # If so, stage the files in the pops directory for this object 
+        # If so, stage the files in the pops directory for this object
         if nincobj > 0:
             popsPath = os.path.join(trimfilePath, 'pops') # Orig location for 'pops' dir
             dest = '%s/pops' %(trimfileStagePath)
@@ -327,7 +328,7 @@ class SingleVisitScriptGenerator(AbstractScriptGenerator):
             for singleFile in glob.glob('%s/*%s*' %(popsPath, origObshistid)):
                 print '   Moving %s to %s/pops' %(singleFile, dest)
                 shutil.copy(singleFile, dest)
-            
+
         # Generate the list of job scripts for the ray tracing and post processing
         fileDest = os.path.join(stagePath, scriptFileName)
         print 'Attempting to add %s to file %s in %s' %(fileDest, scriptOutList,
@@ -335,7 +336,7 @@ class SingleVisitScriptGenerator(AbstractScriptGenerator):
         #os.chdir(self.imsimHomePath)  Now created in scriptInvocationPath
         with file(scriptOutList, 'a') as parFile:
             parFile.write('%s \n' %(fileDest))
-        
+
 
 
 class SingleVisitScriptGenerator_Pbs(SingleVisitScriptGenerator):
@@ -359,7 +360,7 @@ class SingleVisitScriptGenerator_Pbs(SingleVisitScriptGenerator):
         """
         Write PBS-specific header information.
         This also calls self.logging() and self.setupCleanup()
-        
+
         """
         policy = self.policy
         #obshistid = self.obsHistID
@@ -379,10 +380,10 @@ class SingleVisitScriptGenerator_Pbs(SingleVisitScriptGenerator):
         else:
             queue = '-q %s' %(queueTmp)
 
-        
+
         filt = self.filtmap[filter]
 
-        filename = '%s_f%s' %(obshistid, filt) 
+        filename = '%s_f%s' %(obshistid, filt)
         paramdir = '%s-f%s' %(obshistid, filt)
         savePath = os.path.join(saveDir, paramdir)
 
@@ -512,6 +513,3 @@ class SingleVisitScriptGenerator_Pbs(SingleVisitScriptGenerator):
         # close file
         pbsout.close()
         return
-
-
-        

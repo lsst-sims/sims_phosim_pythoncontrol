@@ -1,5 +1,5 @@
-#!/share/apps/lsst_gcc440/Linux64/external/python/2.5.2/bin/python
-############!/usr/bin/env python
+#!/usr/bin/python
+###########!/share/apps/lsst_gcc440/Linux64/external/python/2.5.2/bin/python
 
 """
 Brief:   Python script to create the 378 shell scripts necessary to execute
@@ -17,7 +17,7 @@ Brief:   Python script to create the 378 shell scripts necessary to execute
 Date:    Jan 26, 2012
 Authors: Nicole Silvestri, U. Washington, nms21@uw.edu,
          Jeff Gardner, U. Washington, Google, gardnerj@phys.washington.edu
-Updated: 
+Updated:
 
 Usage:   python fullFocalplanePbs.py [options]
 Options: trimfile:    absolute path and name of the trimfile
@@ -27,7 +27,7 @@ Options: trimfile:    absolute path and name of the trimfile
                       to change simulator defaults (eg. turn clouds off)
 
          If running in single chip mode, you will also need the following options:
-         rx: Raft x value 
+         rx: Raft x value
          ry: Raft y value
          sx: Sensor x value
          sy: Sensor y value
@@ -45,11 +45,9 @@ from AllChipsScriptGenerator import *
 def main(trimfile, imsimConfigFile, extraidFile, rx, ry, sx, sy, ex):
 
     """
-
     Run the fullFocalplanePbs.py script, populating it with the
     correct user and cluster job submission information from an LSST
-    policy file. 
-    
+    policy file.
     """
 
     print 'Running fullFocalPlane (and AllChipsScriptGenerator) on: ', trimfile
@@ -70,9 +68,9 @@ def main(trimfile, imsimConfigFile, extraidFile, rx, ry, sx, sy, ex):
         quit()
     else:
         print "Scheduler '%s' unknown.  Use -h or --help for help." %(scheduler)
-    
-    
-    
+
+
+
 if __name__ == "__main__":
 
     if not len(sys.argv) == 9:

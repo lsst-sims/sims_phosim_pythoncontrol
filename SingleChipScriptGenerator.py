@@ -1,4 +1,5 @@
-#!/share/apps/lsst_gcc440/Linux64/external/python/2.5.2/bin/python
+#!/usr/bin/python
+#############!/share/apps/lsst_gcc440/Linux64/external/python/2.5.2/bin/python
 
 """
 Brief:   Python script to write all necessary parameters to a PBS script
@@ -69,12 +70,12 @@ class SingleChipScriptGenerator(AbstractScriptGenerator):
     def dbSetup(self, cmdFile, sensorId):
         print 'Database not implemented in shell script version!'
         sys.exit()
-        
+
     def dbCleanup(self, jobOut, obshistid, sensorId):
         print 'Database not implemented in shell script version!'
         sys.exit()
-        
-                 
+
+
     def jobFileName(self,id):
         return 'exec_%s_%s.csh' %(self.obshistid, id)
 
@@ -182,7 +183,7 @@ class SingleChipScriptGenerator(AbstractScriptGenerator):
                 print >>jobFile, "### Copy files from stagePath2 to exec node"
                 print >>jobFile, "### ---------------------------------------"
                 print >>jobFile, " "
-                
+
                 #
                 # Update the jobAllocator database
                 #
@@ -230,7 +231,7 @@ class SingleChipScriptGenerator(AbstractScriptGenerator):
 
 
 
-    
+
     def writeJobCommands(self, jobFileName, wuID, cid, id, rx, ry, sx, sy, ex):
 
         """
@@ -249,7 +250,7 @@ class SingleChipScriptGenerator(AbstractScriptGenerator):
                 jobFile.write('cd %s \n' %(wuPath))
                 jobFile.write('echo Running chip.py %s %s %s %s %s %s %s %s \n' %(self.obshistid, self.filt, rx, ry, sx, sy, ex, self.scratchOutputDir))
                 jobFile.write('%s chip.py %s %s %s %s %s %s %s %s \n' %(self.pythonExec, self.obshistid, self.filt, rx, ry, sx, sy, ex, self.scratchOutputDir))
-                if self.centid == '1':            
+                if self.centid == '1':
                     jobFile.write('echo Copying centroid file to %s \n' %(self.centroidPath))
                     jobFile.write('cp raytrace/centroid_imsim_%s_%s.txt %s \n' %(self.obshistid, id, self.centroidPath))
 
@@ -357,7 +358,7 @@ class SingleChipScriptGenerator_Pbs(SingleChipScriptGenerator):
     Job execution, output transfer, and cleanup phases are the same as the
     master class.
     """
-    
+
     def __init__(self, policy, obshistid, filter, filt, centid, centroidPath,
                  stagePath2, paramDir, trackingParFile):
         SingleChipScriptGenerator.__init__(self, policy, obshistid, filter, filt,
@@ -370,7 +371,7 @@ class SingleChipScriptGenerator_Pbs(SingleChipScriptGenerator):
         #self.scratchPath = os.path.join(self.policy.get('general','scratchPath'), self.username)
         print 'Your exec-node scratch Path is: ', self.scratchPath
         return
-        
+
 
     def jobFileName(self, id):
         return 'exec_%s_%s.pbs' %(self.obshistid, id)
@@ -402,7 +403,7 @@ class SingleChipScriptGenerator_Pbs(SingleChipScriptGenerator):
         #jobFile.write('python %s/python/lsst/sims/catalogs/generation/jobAllocator/myJobTracker.py %s running %s %s\n'%(self.catGenPath, self.obshistid, sensorId, self.username, self.filter))
         jobFile.write('echo Updated the jobAllocator database with key: RUNNING. \n')
         return
-    
+
 
     def dbCleanup(self, jobOut, obshistid, sensorid):
         catGenPath = self.policy.get('lsst','catGen')
@@ -449,7 +450,7 @@ class SingleChipScriptGenerator_Pbs(SingleChipScriptGenerator):
         nodes            = self.policy.getint('general','numNodes')
         pmem             = self.policy.getint('general','pmem')
         walltime         = self.policy.get('pbs','walltime')
-        username         = self.policy.get('pbs','username')   
+        username         = self.policy.get('pbs','username')
         rootEmail        = self.policy.get('pbs','rootEmail')
         queueTmp         = self.policy.get('pbs','queue')
 
@@ -604,7 +605,7 @@ class SingleChipScriptGenerator_Pbs(SingleChipScriptGenerator):
         print >>pbsout, "set username = %s" %(self.username)
         if self.useDb == 1:
             print >>pbsout, "set minerva0_command = 'cd %s; /opt/torque/bin/qsub -N clean.%s -W depend=afternotok:'$pbs_job_id'  pbs/cleanup_error.csh -v CLEAN_MASTER_NODE_ID='$master_node_id',CLEAN_LOCAL_SCRATCH_DIR='$local_scratch_dir',OBSHISTID='$obshistid',SENSORID='$sensorid',CAT_GEN='$cat_gen',USERNAME='$username" %(imsimHomePath, wuID)
-        else:    
+        else:
             print >>pbsout, "set minerva0_command = 'cd %s; /opt/torque/bin/qsub -N clean.%s -W depend=afternotok:'$pbs_job_id'  pbs/cleanup_files.csh -v CLEAN_MASTER_NODE_ID='$master_node_id',CLEAN_LOCAL_SCRATCH_DIR='$local_scratch_dir" %(imsimHomePath, wuID)
         print >>pbsout, "echo $minerva0_command"
         print >>pbsout, "#set pbs_output = `ssh minerva0 $minerva0_command`"
@@ -614,6 +615,3 @@ class SingleChipScriptGenerator_Pbs(SingleChipScriptGenerator):
         print >>pbsout, " "
         pbsout.close()
         return
-
-
-

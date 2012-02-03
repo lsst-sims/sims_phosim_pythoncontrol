@@ -1,4 +1,5 @@
-#!/share/apps/lsst_gcc440/Linux64/external/python/2.5.2/bin/python
+#!/usr/bin/python
+#############!/share/apps/lsst_gcc440/Linux64/external/python/2.5.2/bin/python
 
 """
 Brief:   Python script to generate a PBS file for each instance
@@ -6,7 +7,7 @@ Brief:   Python script to generate a PBS file for each instance
          of these scripts will be run individually on a cluster node to create
          the necessary *.pars, *.fits and *.pbs files for individual sensor
          jobs.
-         
+
 Usage:   python generateVisitPbs.py [options]
 Options: fileName: Name of file containing trimfile list
          imsimPolicyFile: Name of your policy file
@@ -18,7 +19,7 @@ Authors: Nicole Silvestri, U. Washington, nms@astro.washington.edu
 Updated: November 30, 2011 JPG: Removed dependency on LSST stack by swapping
                                 LSST policy file with Python ConfigParser
 
-Notes:   The script takes a list of trimfiles to run.  
+Notes:   The script takes a list of trimfiles to run.
          The extraidFile is the name of an additional file used to change the
          default imsim parameters (eg. to turn clouds off, create centroid files, etc).
 
@@ -116,7 +117,7 @@ class AllVisitsScriptGenerator:
                         #JPG: Note that this is a string addition operator
                         self.extraid = self.extraid + extraid_tmp
         print 'Final extraid:', self.extraid
-                        
+
 
 
     def makeScripts(self):
@@ -125,7 +126,7 @@ class AllVisitsScriptGenerator:
         in the trimfile and then calls scriptGen.makeScript() to generate the actual
         script.
         """
-        self.checkDirectories()        
+        self.checkDirectories()
 
         # Remove the file containing the script names if it exists.
         scriptOutList = 'visitScriptsToRun_%s.lis' %(self.extraIdFile)
@@ -135,7 +136,7 @@ class AllVisitsScriptGenerator:
                 os.remove(scriptFile)
             except OSError:
                 pass
-        
+
         # Note that tarExecFiles() needs to be called before initializing
         # SingleVisitScriptGenerator because it defines self.execFileTgzName
         self.tarExecFiles()
@@ -144,7 +145,7 @@ class AllVisitsScriptGenerator:
         scriptGen = SingleVisitScriptGenerator(self.scriptInvocationPath, scriptOutList, self.policy,
                                                self.imsimConfigFile, self.extraIdFile,
                                                self.execFileTgzName)
-        
+
         for trimfileName in self.trimfileList:
             trimfileName = trimfileName.strip()
             self.processTrimFile(scriptGen, trimfileName)
@@ -207,8 +208,8 @@ class AllVisitsScriptGenerator:
             except OSError:
                 print OSError
         return
-       
-        
+
+
     def checkVisitDirectories(self, visitSavePath, visitLogPath, visitParamDir, visitTrimfilePath):
         # Checks the visit-specific directories accessible from the client
         print 'Creating visit directories (and removing old ones if necessary):'
@@ -246,7 +247,7 @@ class AllVisitsScriptGenerator:
             print OSError
 
         return
-        
+
 
     def tarExecFiles(self):
         # None of the files in the source tree should be visit-dependent
@@ -256,7 +257,7 @@ class AllVisitsScriptGenerator:
         os.chdir(self.imsimHomePath)
         self.execFileTgzName = 'imsimExecFiles.tar.gz'
         cmd = 'tar czvf %s ancillary/atmosphere_parameters/* ancillary/atmosphere/cloud ancillary/atmosphere/turb2d ancillary/optics_parameters/optics_parameters ancillary/optics_parameters/control ancillary/trim/trim ancillary/Add_Background/add_background ancillary/Add_Background/filter_constants* ancillary/Add_Background/fits_files ancillary/Add_Background/SEDs/*.txt ancillary/Add_Background/update_filter_constants ancillary/Add_Background/vignetting_*.txt ancillary/cosmic_rays/create_rays ancillary/cosmic_rays/iray_textfiles/iray* ancillary/e2adc/e2adc ancillary/tracking/tracking raytrace/lsst raytrace/*.txt raytrace/version raytrace/setup pbs/distributeFiles.py' %(self.execFileTgzName)
-        
+
         print 'Tarring all exec files.'
         subprocess.check_call(cmd, shell=True)
 
@@ -338,7 +339,7 @@ class AllVisitsScriptGenerator_Pbs(AllVisitsScriptGenerator):
                 os.remove(scriptFile)
             except OSError:
                 pass
-        
+
         # Note that tarExecFiles() needs to be called before initializing
         # SingleVisitScriptGenerator because it defines self.execFileTgzName
         self.tarExecFiles()
@@ -347,7 +348,7 @@ class AllVisitsScriptGenerator_Pbs(AllVisitsScriptGenerator):
         scriptGen = SingleVisitScriptGenerator_Pbs(self.scriptInvocationPath, scriptOutList, self.policy,
                                                self.imsimConfigFile, self.extraIdFile,
                                                self.execFileTgzName)
-        
+
         for trimfileName in self.trimfileList:
             trimfileName = trimfileName.strip()
             self.processTrimFile(scriptGen, trimfileName)
@@ -384,4 +385,3 @@ class AllVisitsScriptGenerator_Pbs(AllVisitsScriptGenerator):
                           visitFileTgz, pbsFileName, pbsOutList, visitDir)
 
         return
-

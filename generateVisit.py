@@ -1,4 +1,5 @@
-#!/share/apps/lsst_gcc440/Linux64/external/python/2.5.2/bin/python
+#!/usr/bin/python
+################!/share/apps/lsst_gcc440/Linux64/external/python/2.5.2/bin/python
 
 """
 !!!!!!!
@@ -15,7 +16,7 @@ Brief:   A Python script to generate a pre-processing script for each instance
          one per detector.  The flavor of each script (i.e. what scheduling
          environment it is designed for) can be varied per-phase by setting
          the 'scheduler1' and 'scheduler2' options.
-                  
+
 Usage:   python generateVisit.py [options]
 Options: trimfileListName: Name of file containing trimfile list
          imsimConfigFile: Name of your config file (note: no longer uses LSST policy format)
@@ -31,7 +32,7 @@ Updated: November 30, 2011 JPG: Removed dependency on LSST stack by swapping
                 ScriptGenerator) complete.  Reworked configuration parameters so
                 directory names make more sense.
 
-Notes:   The script takes a list of trimfiles to run.  
+Notes:   The script takes a list of trimfiles to run.
          The extraidFile is the name of an additional file used to change the
          default imsim parameters (eg. to turn clouds off, create centroid files, etc).
 
@@ -80,5 +81,3 @@ if __name__ == "__main__":
         quit()
     else:
         print "Scheduler '%s' unknown.  Use -h or --help for help." %(scheduler)
-    
-        
