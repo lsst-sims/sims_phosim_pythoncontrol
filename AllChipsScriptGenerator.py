@@ -2,59 +2,12 @@
 ############!/share/apps/lsst_gcc440/Linux64/external/python/2.5.2/bin/python
 
 """
-Brief:   Python script to create parameter files for each stage of the Image
-         Simulator and to create PBS scripts for each sensor job per instance catalog.
-         Adapted from Emily Grace & John Peterson's (Purdue U.) shell script for
-         running on a Condor cluster at Purdue.
-         Rewritten in python to work with PBS/MOAB/MAUI on the UW Cluster.
+Brief:   This class sets generates all of the scripts needed for the ray-tracing
+         phase and beyond, i.e. all of the per-chip scripts.
 
-Date:    May 01, 2010
+Date:    January 26, 2012
 Authors: Nicole Silvestri, U. Washington, nms21@uw.edu,
          Jeff Gardner, U. Washington, Google, gardnerj@phys.washington.edu
-Updated: May 04, 2011 - in sync with revision 21185 of the simulator code trunk
-         December 01, 2011 - Replaced pexPolicy usage with generic ConfigParser
-                             so as to remove dependencies on LSST stack.
-
-Usage:   python fullFocalplanePbs.py [options]
-Options: trimfile:    absolute path and name of the trimfile
-                      to process (unzipped)
-         policy:      your copy of the imsimPbsPolicy.paf file
-         extraidFile: name of the file containing extra parameters
-                      to change simulator defaults (eg. turn clouds off)
-
-         If running in single chip mode, you will also need the following options:
-         rx: Raft x value
-         ry: Raft y value
-         sx: Sensor x value
-         sy: Sensor y value
-         ex: Snap x value
-
-Notes:   * You must have the LSST stack/eups setup - eg. source loadLSST.csh
-           You must also, at a minimum, have the following LSST packages setup:
-           pex_policy
-           pex_logging
-           pex_exceptions
-           python (Minerva cluster python version is too old)
-
-Methods:  1. __init__: setup and initialization of all needed parameters and directories.
-          2. writeObsCatParams: make the object catalog parameter file
-          3. generateAtmosphericParams: make the atmosphere parameter file.
-          4. generateAtmosphericScreen: make the atmosphere screens.
-          5. generateCloudScreen: make the cloud screens.
-          6. generateControlParams: make the control parameter file.
-          7. generateTrackingParams: make the tracking parameter file.
-          8. loopOverChips: This is the main module. It runs the trim program
-             to create catalogs for each chip. This method calls the following five methods.
-          9. generateRaytraceParams: make the raytrace parameter file.
-         10. generateBackgroundParams: make the background parameter file.
-         11. generateCosmicRayParams: make the cosmic ray parameter file.
-         12. generateE2adcParams: make the e2adc parameter files.
-         13. makePbsScripts: make the PBs scripts, one for each sensor/snap with sources.
-         14. cleanup: move all parameter, pbs and tar files to save directory.
-
-To Do:   Remove all directory dependence - use environment variables or policy file
-         Need more robust verification of integrity of the SED directory on the node in the pbs script.
-         Remove setup of pex* from batch script except in the case of Nicole's job monitor DB.
 """
 
 from __future__ import with_statement
@@ -122,8 +75,8 @@ class AllChipsScriptGenerator:
         """
 
         self.policy = policy
-        # Should not ever reference imsimsHomePath on exec node
-        #self.imsimHomePath = os.getenv("IMSIM_HOME_PATH")
+        # Should not ever reference imsimSourcePath on exec node
+        #self.imsimHomePath = os.getenv("IMSIM_SOURCE_PATH")
         self.imsimDataPath = os.getenv("CAT_SHARE_DATA")
 
         self.workDir = os.getcwd()
@@ -1029,7 +982,8 @@ class AllChipsScriptGenerator:
             print 'Tarring binaries/executables.'
             shutil.move('nodeFiles%s.tar' %(self.obshistid), '../../')
             os.chdir('../../')
-            cmd = 'tar rvf nodeFiles%s.tar ancillary/trim/trim ancillary/Add_Background/* ancillary/cosmic_rays/* ancillary/e2adc/e2adc raytrace/lsst raytrace/*.txt  raytrace/version raytrace/setup pbs/distributeFiles.py chip.py' %(self.obshistid)
+            #cmd = 'tar rvf nodeFiles%s.tar ancillary/trim/trim ancillary/Add_Background/* ancillary/cosmic_rays/* ancillary/e2adc/e2adc raytrace/lsst raytrace/*.txt  raytrace/version raytrace/setup pbs/distributeFiles.py chip.py' %(self.obshistid)
+            cmd = 'tar rvf nodeFiles%s.tar ancillary/trim/trim ancillary/Add_Background/* ancillary/cosmic_rays/* ancillary/e2adc/e2adc raytrace/lsst raytrace/*.txt  raytrace/version pbs/distributeFiles.py chip.py' %(self.obshistid)
             subprocess.check_call(cmd, shell=True)
 
             # Zip the tar file.

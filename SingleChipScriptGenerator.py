@@ -2,16 +2,15 @@
 #############!/share/apps/lsst_gcc440/Linux64/external/python/2.5.2/bin/python
 
 """
-Brief:   Python script to write all necessary parameters to a PBS script
-         to run on Athena0 to execute the Image Simulator software.
+Brief:   Generates the script for doing the raytracing and postprocessing
+         steps for a single CCD detector.
 
-Date:    June 03, 2010
-Author:  Nicole Silvestri, U. Washington, nms21@uw.edu
-Updated: June 07, 2011 - nms
+Date:    January 26, 2012
+Authors: Nicole Silvestri, U. Washington, nms21@uw.edu
+         Jeffrey P. Gardner, U. Washington, Google, gardnerj@phys.washington.edu
 
 Notes:   Modules here are called by fullFocalplanePbs.py.
-         Requires imsimHomePath/pbs/distributeFiles.py.
-
+         Requires imsimSourcePath/pbs/distributeFiles.py.
 """
 
 from __future__ import with_statement
@@ -578,7 +577,7 @@ class SingleChipScriptGenerator_Pbs(SingleChipScriptGenerator):
 
         #scratchdir = '%s/%s' %(scratchpartition, nodedir)
         wuPath = os.path.join(self.scratchPath, wuID)
-        imsimHomePath = os.getenv("IMSIM_HOME_PATH")
+        imsimSourcePath = os.getenv("IMSIM_SOURCE_PATH")
 
         tempHist, rNum, sNum, eNumber = wuID.split('_')
         obshistid = re.sub('%s/' %(self.username),'', tempHist)
@@ -604,9 +603,9 @@ class SingleChipScriptGenerator_Pbs(SingleChipScriptGenerator):
         print >>pbsout, "set sensorid = %s" %(sensorid)
         print >>pbsout, "set username = %s" %(self.username)
         if self.useDb == 1:
-            print >>pbsout, "set minerva0_command = 'cd %s; /opt/torque/bin/qsub -N clean.%s -W depend=afternotok:'$pbs_job_id'  pbs/cleanup_error.csh -v CLEAN_MASTER_NODE_ID='$master_node_id',CLEAN_LOCAL_SCRATCH_DIR='$local_scratch_dir',OBSHISTID='$obshistid',SENSORID='$sensorid',CAT_GEN='$cat_gen',USERNAME='$username" %(imsimHomePath, wuID)
+            print >>pbsout, "set minerva0_command = 'cd %s; /opt/torque/bin/qsub -N clean.%s -W depend=afternotok:'$pbs_job_id'  pbs/cleanup_error.csh -v CLEAN_MASTER_NODE_ID='$master_node_id',CLEAN_LOCAL_SCRATCH_DIR='$local_scratch_dir',OBSHISTID='$obshistid',SENSORID='$sensorid',CAT_GEN='$cat_gen',USERNAME='$username" %(imsimSourcePath, wuID)
         else:
-            print >>pbsout, "set minerva0_command = 'cd %s; /opt/torque/bin/qsub -N clean.%s -W depend=afternotok:'$pbs_job_id'  pbs/cleanup_files.csh -v CLEAN_MASTER_NODE_ID='$master_node_id',CLEAN_LOCAL_SCRATCH_DIR='$local_scratch_dir" %(imsimHomePath, wuID)
+            print >>pbsout, "set minerva0_command = 'cd %s; /opt/torque/bin/qsub -N clean.%s -W depend=afternotok:'$pbs_job_id'  pbs/cleanup_files.csh -v CLEAN_MASTER_NODE_ID='$master_node_id',CLEAN_LOCAL_SCRATCH_DIR='$local_scratch_dir" %(imsimSourcePath, wuID)
         print >>pbsout, "echo $minerva0_command"
         print >>pbsout, "#set pbs_output = `ssh minerva0 $minerva0_command`"
         print >>pbsout, "#set cleanup_job_id = `echo $pbs_output | awk -F. '{print $1}'`"

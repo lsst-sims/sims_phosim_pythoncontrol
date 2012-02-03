@@ -3,12 +3,14 @@
 
 """
 !!!!!!!
-NOTICE: 1/06/2012: These python scripts work *only* with trunk tag v-2.2.1!
+NOTICE: 1/06/2012: 
 !!!!!!!  Python control scripts have been moved from the main imsim branch
          to /sims/control/python.  For working with later revisions of ImSim,
          please work with the separate python control branch.
 
          Also note: use the newer .cfg files and not the .paf.
+
+         These python scripts work *only* with trunk tag v-2.2.1
 
 Brief:   A Python script to generate a pre-processing script for each instance
          catalog (trimfile) - one script per visit. When executing, the
@@ -25,12 +27,16 @@ Options: trimfileListName: Name of file containing trimfile list
 Date:    November 30, 2011
 Authors: Nicole Silvestri, U. Washington, nms@astro.washington.edu
          Jeffrey P. Gardner, U. Washington, Google, gardnerj@phys.washington.edu
-Updated: November 30, 2011 JPG: Removed dependency on LSST stack by swapping
+Updated: 
+         November 30, 2011 JPG: Removed dependency on LSST stack by swapping
                                 LSST policy file with Python ConfigParser
          December 21, 2011 JPG: Objectified code and moved objects to ScriptGenerator.py
          January 6, 2012  JPG: Objectification of generateVisit (which uses
-                ScriptGenerator) complete.  Reworked configuration parameters so
-                directory names make more sense.
+                AllVisistsScriptGenerator) complete.  Reworked configuration parameters so
+                directory names make more sense.  Moved objects out of here and into
+                to their proper files.
+         02/01/2012 JPG: No longer takes the scheduler as an argument but reads it from
+                         config file
 
 Notes:   The script takes a list of trimfiles to run.
          The extraidFile is the name of an additional file used to change the

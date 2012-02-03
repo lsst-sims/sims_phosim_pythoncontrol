@@ -132,7 +132,7 @@ class AbstractScriptGenerator:
                 cshOut.write('echo Initializing lock file. \n')
                 cshOut.write('lockfile -l 1800 imsim_shared_data.lock \n')
                 cshOut.write('if (-d data/starSED/kurucz ) then \n')
-                cshOut.write('  echo Good news! The data directory %s already exists! \n'
+                cshOut.write('  echo Good news everyone! The data directory %s already exists! \n'
                              %(os.path.join(self.scratchSharedPath, 'data')))
                 cshOut.write('else \n')
                 cshOut.write('  echo The data directory %s does not exist. Copying %s. \n'
