@@ -36,7 +36,7 @@ class SingleVisitScriptGenerator(AbstractScriptGenerator):
     def __init__(self, scriptInvocationPath, scriptOutList, policy, imsimConfigFile, extraIdFile,
                  sourceFileTgzName, execFileTgzName, controlFileTgzName):
         self.imsimSourcePath = os.getenv("IMSIM_SOURCE_PATH")
-        self.imsimDataPath = os.getenv("CAT_SHARE_DATA")
+        #self.imsimDataPath = os.getenv("CAT_SHARE_DATA")
 
         self.imsimConfigFile = imsimConfigFile
         self.extraIdFile = extraIdFile
@@ -68,13 +68,19 @@ class SingleVisitScriptGenerator(AbstractScriptGenerator):
         self.jobName = self.policy.get('general','jobname')
         self.debugLevel = self.policy.getint('general','debuglevel')
         self.sleepMax = self.policy.getint('general','sleepmax')
+        # Shared data locations
+        self.imsimDataPath = self.policy.get('general','dataPathPRE')
+        self.useSharedData = self.policy.getboolean('general','useSharedPRE')
+        self.tarball = self.policy.get('general','dataTarballPRE')
+        if self.useSharedData == True:
+          self.scratchSharedPath = self.policy.get('general','scratchDataPath')
+        else:
+          self.scratchSharedPath = os.path.join(self.imsimDataPath,'sharedData')
         # Directories and filenames
         self.scratchPath = self.policy.get('general','scratchExecPath')
-        self.scratchSharedPath = self.policy.get('general','scratchSharedPath')
         self.savePath  = self.policy.get('general','savePath')
         self.stagePath  = self.policy.get('general','stagePath1')
         self.stagePath2 = self.policy.get('general','stagePath2')
-        self.tarball  = self.policy.get('general','dataTarball')
         # Job monitor database
         self.useDatabase = self.policy.getboolean('general','useDatabase')
         return
@@ -145,7 +151,7 @@ class SingleVisitScriptGenerator(AbstractScriptGenerator):
                 print >>cshOut, "### ---------------------------------------"
                 print >>cshOut, " "
                 cshOut.write('unalias cp \n')
-                cshOut.write('setenv CAT_SHARE_DATA %s \n' %(self.imsimDataPath))
+                #cshOut.write('setenv CAT_SHARE_DATA %s \n' %(self.imsimDataPath))
                 cshOut.write('setenv IMSIM_SOURCE_PATH %s \n' %(self.imsimSourcePath))
         except IOError:
             print "Could not open %s for writing shell script" %(scriptFileName)
@@ -198,7 +204,7 @@ class SingleVisitScriptGenerator(AbstractScriptGenerator):
                 # Set soft link to the catalog directory
                 #
                 cshOut.write('echo Setting soft link to data directory. \n')
-                cshOut.write('ln -s %s/ data \n' %(os.path.join(self.scratchSharedPath, 'data')))
+                cshOut.write('ln -s %s data \n' %(os.path.join(self.scratchSharedPath, 'sharedData')))
                 # scratchOutputPath gets made in fullFocalPlane
                 #cshOut.write('mkdir %s \n' %(self.scratchOutputPath))
 
@@ -372,7 +378,7 @@ class SingleVisitScriptGenerator_Pbs(SingleVisitScriptGenerator):
                 print >>pbsOut, "#PBS %s" %(queue)
                 print >>pbsOut, " "
                 pbsOut.write('unalias cp \n')
-                pbsOut.write('setenv CAT_SHARE_DATA %s \n' %(self.imsimDataPath))
+                #pbsOut.write('setenv CAT_SHARE_DATA %s \n' %(self.imsimDataPath))
                 pbsOut.write('setenv IMSIM_SOURCE_PATH %s \n' %(self.imsimSourcePath))
                 pbsOut.write('echo Setting up the LSST Stack to get proper version of Python. \n')
                 pbsOut.write('source /share/apps/lsst_gcc440/loadLSST.csh \n')

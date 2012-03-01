@@ -52,18 +52,27 @@ class SingleChipScriptGenerator(AbstractScriptGenerator):
         self.paramDir = paramDir
         self.trackingParFile = trackingParFile
 
-        self.imsimDataPath = os.getenv("CAT_SHARE_DATA")
         self.pythonExec = self.policy.get('general','python-exec')
+        # Shared data locations
+        #self.imsimDataPath = os.getenv("CAT_SHARE_DATA")
+        self.imsimDataPath = self.policy.get('general','dataPathSEDs')
+        self.useSharedData = self.policy.getboolean('general','useSharedSEDs')
+        self.tarball = self.policy.get('general','dataTarballSEDs')
+        if self.useSharedData == True:
+          self.scratchSharedPath = self.policy.get('general','scratchDataPath')
+        else:
+          self.scratchSharedPath = os.path.join(self.imsimDataPath,'sharedData')
+        # writeCopySharedData() will check the existence of self.dataCheckDir
+        # to determine if it needs to grab and untar self.tarball.
+        self.dataCheckDir = 'data/focal_plane/sta_misalignments/qe_maps'
         # Directories and filenames
         self.savePath  = self.policy.get('general','savePath')
         self.scratchPath = self.policy.get('general','scratchExecPath')
-        self.scratchSharedPath = self.policy.get('general','scratchSharedPath')
         self.scratchOutputDir = self.policy.get('general','scratchOutputDir')
         self.debugLevel = self.policy.getint('general','debuglevel')
         self.sleepMax = self.policy.getint('general','sleepmax')
-        self.tarball = self.policy.get('general','dataTarball')
         # Job monitor database
-        self.useDb = self.policy.get('general','useDatabase')
+        self.useDb = self.policy.getboolean('general','useDatabase')
         return
 
     def dbSetup(self, cmdFile, sensorId):
@@ -161,7 +170,7 @@ class SingleChipScriptGenerator(AbstractScriptGenerator):
                 print >>jobFile, "### ---------------------------------------"
                 print >>jobFile, " "
                 jobFile.write('unalias cp \n')
-                jobFile.write('setenv CAT_SHARE_DATA %s \n' %(self.imsimDataPath))
+                #jobFile.write('setenv CAT_SHARE_DATA %s \n' %(self.imsimDataPath))
         except IOError:
             print "Could not open %s to write header info in writeSetupCommands()" %(jobFileName)
             sys.exit()
@@ -186,7 +195,7 @@ class SingleChipScriptGenerator(AbstractScriptGenerator):
                 #
                 # Update the jobAllocator database
                 #
-                if self.useDb == 1:
+                if self.useDb == True:
                     self.dbSetup(jobFile, sensorId)
                 else:
                     jobFile.write('echo JobDatabase Not Updated.  Not using database. \n')
@@ -204,7 +213,7 @@ class SingleChipScriptGenerator(AbstractScriptGenerator):
                 # Set the soft link to the catalog directory
                 #
                 jobFile.write('echo Setting soft link to data directory. \n')
-                jobFile.write('ln -s %s/ data \n' %(os.path.join(self.scratchSharedPath, 'data')))
+                jobFile.write('ln -s %s/ data \n' %(os.path.join(self.scratchSharedPath, 'sharedData')))
                 #
                 # Create the scratch output directory
                 #
@@ -336,7 +345,7 @@ class SingleChipScriptGenerator(AbstractScriptGenerator):
         print >>jobOut, "echo Now deleting files in %s/%s" %(self.scratchPath, wuID)
         print >>jobOut, "/bin/rm -rf %s/%s" %(self.scratchPath, wuID)
         print >>jobOut, "echo ---"
-        if self.useDb == 1:
+        if self.useDb == True:
             self.dbCleanup(jobOut, self.obshistid, sensorId)
         print >>jobOut, "echo single-chip job finished at `date`"
         print >>jobOut, " "
@@ -511,7 +520,7 @@ class SingleChipScriptGenerator_Pbs(SingleChipScriptGenerator):
         pbsout.write('echo Setting up the LSST Stack to get the proper version of Python. \n')
         pbsout.write('source /share/apps/lsst_gcc440/loadLSST.csh \n')
         pbsout.write('unalias cp \n')
-        pbsout.write('setenv CAT_SHARE_DATA %s \n' %(self.imsimDataPath))
+        #pbsout.write('setenv CAT_SHARE_DATA %s \n' %(self.imsimDataPath))
         pbsout.close()
 
         self.logging(pbsfilename, wuID)
@@ -597,12 +606,12 @@ class SingleChipScriptGenerator_Pbs(SingleChipScriptGenerator):
         print >>pbsout, "set local_scratch_dir = %s" %(wuPath)
         print >>pbsout, "set job_submission_dir = $PBS_O_WORKDIR"
         print >>pbsout, "set obshistid = %s" %(obshistid)
-        if self.useDb == 1:
+        if self.useDb == True:
             catGenPath = self.policy.get('lsst','catGen')
             print >>pbsout, "set cat_gen = %s" %(catGenPath)
         print >>pbsout, "set sensorid = %s" %(sensorid)
         print >>pbsout, "set username = %s" %(self.username)
-        if self.useDb == 1:
+        if self.useDb == True:
             print >>pbsout, "set minerva0_command = 'cd %s; /opt/torque/bin/qsub -N clean.%s -W depend=afternotok:'$pbs_job_id'  pbs/cleanup_error.csh -v CLEAN_MASTER_NODE_ID='$master_node_id',CLEAN_LOCAL_SCRATCH_DIR='$local_scratch_dir',OBSHISTID='$obshistid',SENSORID='$sensorid',CAT_GEN='$cat_gen',USERNAME='$username" %(imsimSourcePath, wuID)
         else:
             print >>pbsout, "set minerva0_command = 'cd %s; /opt/torque/bin/qsub -N clean.%s -W depend=afternotok:'$pbs_job_id'  pbs/cleanup_files.csh -v CLEAN_MASTER_NODE_ID='$master_node_id',CLEAN_LOCAL_SCRATCH_DIR='$local_scratch_dir" %(imsimSourcePath, wuID)

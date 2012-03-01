@@ -49,9 +49,9 @@ class AllVisitsScriptGenerator:
         self.imsimExecPath = os.getenv("IMSIM_EXEC_PATH")
         if self.imsimExecPath == None:
             self.imsimExecPath = self.imsimSourcePath
-        self.imsimDataPath = os.getenv("CAT_SHARE_DATA")
-        if self.imsimDataPath is None:
-            raise NameError('Could not find value for CAT_SHARE_DATA.')
+        #self.imsimDataPath = os.getenv("CAT_SHARE_DATA")
+        #if self.imsimDataPath is None:
+        #    raise NameError('Could not find value for CAT_SHARE_DATA.')
         self.imsimConfigFile = imsimConfigFile
 
         # map filter number to filter character
@@ -68,7 +68,6 @@ class AllVisitsScriptGenerator:
         self.savePath  = self.policy.get('general','savePath')
         self.stagePath  = self.policy.get('general','stagePath1')
         self.stagePath2  = self.policy.get('general','stagePath2')
-        self.tarball  = self.policy.get('general','dataTarball')
         # Job monitor database
         self.useDatabase = self.policy.getboolean('general','useDatabase')
 

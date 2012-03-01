@@ -77,7 +77,7 @@ class AllChipsScriptGenerator:
         self.policy = policy
         # Should not ever reference imsimSourcePath on exec node
         #self.imsimHomePath = os.getenv("IMSIM_SOURCE_PATH")
-        self.imsimDataPath = os.getenv("CAT_SHARE_DATA")
+        #self.imsimDataPath = os.getenv("CAT_SHARE_DATA")
 
         self.workDir = os.getcwd()
         print 'fullFocalPlane being run in directory %s' %(self.workDir)
@@ -103,6 +103,7 @@ class AllChipsScriptGenerator:
         self.savePath = self.policy.get('general','savePath')
         self.stagePath = self.policy.get('general','stagePath1')
         self.stagePath2 = self.policy.get('general','stagePath2')
+        self.useSharedSEDs = self.policy.getboolean('general','useSharedSEDs')
 
         #
         # LSST-specific params
@@ -595,6 +596,25 @@ class AllChipsScriptGenerator:
 
         return
 
+    def writeSedManifest(self, trimCatFile, cid):
+        """
+        Use the output of the "trim" program, specifically trimcatalog_*.pars, to
+        figure out which SEDs are needed from the shared catalog for chip 'cid'.
+        Generate a manifest of these and write it to sedlist_*.txt.
+
+        For the moment, just do this via a shell command rather than loading
+        everything into Python.
+        """
+        cmd = 'cat %s ' % trimCatFile
+        #cmd = cmd + '| egrep \'starSED|galaxySED|ssmSED|agnSED|flatSED|sky\' | awk \'{print "../data/"$6", \\\\"}\' '
+        cmd = cmd + '| egrep \'starSED|galaxySED|ssmSED|agnSED|flatSED|sky\' | awk \'{print $6 }\' '
+        cmd = cmd + '| sort | uniq > sedlist_%s_%s.txt' %(self.obshistid, cid)
+        print 'Executing command:'
+        print '  ' + cmd
+        subprocess.check_call(cmd, shell=True)
+
+
+
     def loopOverChips(self, scriptGen, wav):
 
         """
@@ -678,6 +698,7 @@ class AllChipsScriptGenerator:
                     subprocess.check_call(cmd, shell=True)
                     print 'Finished Running TRIM.'
 
+                    # Postprocess the trimcatalog*.pars files
                     sxList = ['0', '1', '2']
                     syList = ['0', '1', '2']
                     if self.mysx != '':
@@ -696,7 +717,8 @@ class AllChipsScriptGenerator:
 
                     os.chdir('../..')
                     try:
-                        os.remove(trimParFile)
+                        #TEMP os.remove(trimParFile)
+                        pass
                     except:
                         #print 'WARNING: No file %s to remove!' %(trimParFile)
                         pass
@@ -715,7 +737,16 @@ class AllChipsScriptGenerator:
                             print 'minsource', self.minsource
                             # MINSOURCE=0 in trimfile header will produce background-only images.
                             # if numLines > 0: # creates script for the sensor designated by cid
+                            #TEMP: This should be changed to numLines-2 > self.minsource since
+                            #      the addition of "lsst" at the end means an empty file is 2 lines long.
                             if numLines > self.minsource:
+
+                                # If useSharedSEDs is set to 'true', then we are going to read only
+                                # the SEDs that we need directly from the shared storage location.
+                                # So figure out which SED files are needed for this chip and store
+                                # in sedlist_*.txt
+                                if self.useSharedSEDs == True:
+                                  self.writeSedManifest(trimCatFile, cid)
 
                                 newTrimCatFile01 = 'trimcatalog_%s_%s_E001.pars' %(self.obshistid, cid)
                                 newTrimCatFile00 = 'trimcatalog_%s_%s_E000.pars' %(self.obshistid, cid)
@@ -990,12 +1021,20 @@ class AllChipsScriptGenerator:
             print 'Gzipping nodeFiles%s.tar file' %(self.obshistid)
             cmd = 'gzip nodeFiles%s.tar' %(self.obshistid)
             subprocess.check_call(cmd, shell=True)
-            print 'Moving nodeFiles%s.tar.gz to %s/.' %(self.obshistid, self.stagePath2)
+            # Move to stagePath2
+            nodeFileName = 'nodeFiles%s.tar.gz' %(self.obshistid)
+            print 'Moving %s to %s/.' %(nodeFileName, self.stagePath2)
+            if os.path.isfile(os.path.join(self.stagePath2, nodeFileName)):
+              try:
+                os.remove(os.path.join(self.stagePath2, nodeFileName))
+              except OSError:
+                pass
             shutil.move('nodeFiles%s.tar.gz' %(self.obshistid), '%s/' %(self.stagePath2)) 
 
         # Move the parameter, and fits files to the run directory.
         self.cleanupFitsFiles()
         self.cleanupParFiles()
+        self.cleanupSedFiles()
 
         # Move the script files if created (i.e. not in single-chip mode)
         if self.myrx == '':
@@ -1005,19 +1044,30 @@ class AllChipsScriptGenerator:
     def cleanupFitsFiles(self):
         print 'Moving FITS files to %s.' %(self.paramDir)
         for fits in glob.glob('*.fits'):
-            shutil.move(fits, '%s' %(self.paramDir))
+          # Using copyfile instead of move will overwrite the destination if already present
+          shutil.copy(fits, '%s' %(self.paramDir))
+          os.remove(fits)
         return
 
     def cleanupParFiles(self):
         print 'Moving .par files to %s.' %(self.paramDir)
         for pars in glob.glob('*.pars'):
-            shutil.move(pars, '%s' %(self.paramDir))
+          shutil.copy(pars, '%s' %(self.paramDir))
+          os.remove(pars)
+        return
+
+    def cleanupSedFiles(self):
+        print 'Moving sedlist_*.txt files to %s.' %(self.paramDir)
+        for seds in glob.glob('sedlist_*.txt'):
+          shutil.copy(seds, '%s' %(self.paramDir))
+          os.remove(seds)
         return
 
     def cleanupScriptFiles(self):
         # Deal with the script and command files if created (not single chip mode).
         for pbs in glob.glob('exec_%s_*.csh' %(self.obshistid)):
-            shutil.move(pbs, '%s' %(self.paramDir))
+            shutil.copy(pbs, '%s' %(self.paramDir))
+            os.remove(pbs)
 
         try:
             for cmds in glob.glob('cmds_*.txt'):
