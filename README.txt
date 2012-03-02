@@ -40,3 +40,14 @@ v-1.1     25315        v-2.2.1    Still compatable with Nicole's documented
 				  Python files can reside in a separate 
 				  directory.
 
+v-2.0     25583        v-2.2.1    Major rewrite.  No longer compatable
+                                  with Nicole's version.  Reorg of
+                                  config params to better accomodate
+                                  Exacycle.
+
+v-2.1                  v-2.2.1    Reorganization in the handling of
+                mirrors/exacycle  the shared data (QE, height maps, SEDs)
+		                  to be more flexible and accomodate
+				  shared storage architectures.
+
+	
