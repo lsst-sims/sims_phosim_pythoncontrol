@@ -35,9 +35,8 @@ class SingleVisitScriptGenerator(AbstractScriptGenerator):
     """
     def __init__(self, scriptInvocationPath, scriptOutList, policy, imsimConfigFile, extraIdFile,
                  sourceFileTgzName, execFileTgzName, controlFileTgzName):
-        self.imsimSourcePath = os.getenv("IMSIM_SOURCE_PATH")
-        #self.imsimDataPath = os.getenv("CAT_SHARE_DATA")
 
+        self._loadEnvironmentVars()
         self.imsimConfigFile = imsimConfigFile
         self.extraIdFile = extraIdFile
         self.sourceFileTgzName = sourceFileTgzName
@@ -50,12 +49,8 @@ class SingleVisitScriptGenerator(AbstractScriptGenerator):
         #self.obsHistID = obsHistID
         # Map filter number to filter character
         self.filtmap = {"0":"u", "1":"g", "2":"r", "3":"i", "4":"z", "5":"y"}
-        # Get ImSim version
-        versionFile = os.path.join(self.imsimSourcePath, 'raytrace/version')
-        for line in open(versionFile).readlines():
-            if line.startswith('Revision:'):
-                name, self.revision = line.split()
-
+        # Get ImSim revision
+        self.revision = self._getImSimRevision()
         #
         # Get [general] config file info
         #
@@ -84,6 +79,17 @@ class SingleVisitScriptGenerator(AbstractScriptGenerator):
         # Job monitor database
         self.useDatabase = self.policy.getboolean('general','useDatabase')
         return
+
+    def _loadEnvironmentVars(self):
+        self.imsimSourcePath = os.getenv("IMSIM_SOURCE_PATH")
+        #self.imsimDataPath = os.getenv("CAT_SHARE_DATA")
+        return
+
+    def _getImSimRevision(self):
+        versionFile = os.path.join(self.imsimSourcePath, 'raytrace/version')
+        for line in open(versionFile).readlines():
+            if line.startswith('Revision:'):
+                name, self.revision = line.split()
 
     def jobFileName(self, obshistid, filt):
         return '%s_f%s.csh' %(obshistid, filt)
@@ -313,7 +319,7 @@ class SingleVisitScriptGenerator_Pbs(SingleVisitScriptGenerator):
         SingleVisitScriptGenerator.__init__(self, scriptInvocationPath, scriptOutList, policy,
                                              imsimConfigFile, extraIdFile, sourceFileTgzName,
                                             execFileTgzName, controlFileTgzName)
-        username = self.policy.get('pbs','username')
+        self.username = self.policy.get('pbs','username')
         #self.scratchPath = os.path.join(self.policy.get('general','scratchPath'), username)
         return
 

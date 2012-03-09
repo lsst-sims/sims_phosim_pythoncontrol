@@ -43,15 +43,7 @@ class AllVisitsScriptGenerator:
         # invoked because we will have to cd to other directories
         # temporarily.
         self.scriptInvocationPath = os.getcwd()
-        self.imsimSourcePath = os.getenv("IMSIM_SOURCE_PATH")
-        if self.imsimSourcePath is None:
-            raise NameError('Could not find value for IMSIM_SOURCE_PATH.')
-        self.imsimExecPath = os.getenv("IMSIM_EXEC_PATH")
-        if self.imsimExecPath == None:
-            self.imsimExecPath = self.imsimSourcePath
-        #self.imsimDataPath = os.getenv("CAT_SHARE_DATA")
-        #if self.imsimDataPath is None:
-        #    raise NameError('Could not find value for CAT_SHARE_DATA.')
+        self._loadEnvironmentVars()
         self.imsimConfigFile = imsimConfigFile
 
         # map filter number to filter character
@@ -74,10 +66,7 @@ class AllVisitsScriptGenerator:
         #
         # Load list of trimfiles
         #
-        myFiles = '%s' %(myfile)
-        # files = open(myFiles).readlines()
-        self.trimfileList = open(myFiles).readlines()
-
+        self.trimfileList = self._loadTrimfileList(myfile)
 
         #JPG: I am not certain if extraIdFile can have more than one line with
         #     "extraid".  The loop below replicates the original behavior of
@@ -94,6 +83,23 @@ class AllVisitsScriptGenerator:
                         self.extraid = self.extraid + extraid_tmp
         print 'Final extraid:', self.extraid
 
+
+    def _loadEnvironmentVars(self):
+        self.imsimSourcePath = os.getenv("IMSIM_SOURCE_PATH")
+        if self.imsimSourcePath is None:
+            raise NameError('Could not find value for IMSIM_SOURCE_PATH.')
+        self.imsimExecPath = os.getenv("IMSIM_EXEC_PATH")
+        if self.imsimExecPath == None:
+            self.imsimExecPath = self.imsimSourcePath
+        #self.imsimDataPath = os.getenv("CAT_SHARE_DATA")
+        #if self.imsimDataPath is None:
+        #    raise NameError('Could not find value for CAT_SHARE_DATA.')
+        return
+
+    def _loadTrimfileList(self, myfile):
+        myFiles = '%s' %(myfile)
+        # files = open(myFiles).readlines()
+        return open(myFiles).readlines()
 
 
     def makeScripts(self):
@@ -252,7 +258,7 @@ class AllVisitsScriptGenerator:
         # cd back to the invocation directory
         os.chdir(self.scriptInvocationPath)
         return
-        
+
 
     def tarExecFiles(self):
         """
@@ -264,7 +270,7 @@ class AllVisitsScriptGenerator:
         """
         self.execFileTgzName = 'imsimExecFiles.tar.gz'
         os.chdir(self.imsimExecPath)
-        # Explicitly packaged 
+        # Explicitly packaged
         cmd = 'tar czvf %s ancillary/atmosphere_parameters/create_atmosphere ancillary/atmosphere/cloud ancillary/atmosphere/turb2d ancillary/optics_parameters/optics_parameters ancillary/trim/trim ancillary/Add_Background/add_background ancillary/Add_Background/update_filter_constants ancillary/cosmic_rays/create_rays ancillary/e2adc/e2adc ancillary/tracking/tracking raytrace/lsst' % os.path.join(self.scriptInvocationPath, self.execFileTgzName)
         print 'Tarring all exec files.'
         subprocess.check_call(cmd, shell=True)
@@ -345,7 +351,7 @@ class AllVisitsScriptGenerator_Pbs(AllVisitsScriptGenerator):
         AllVisitsScriptGenerator.__init__(self, myfile, policy, imsimConfigFile, extraIdFile)
         # Check to make sure we are the correct class for the "scheduler1" option
         assert self.policy.get('general','scheduler1') == 'pbs'
-        username = self.policy.get('pbs','username')
+        self.username = self.policy.get('pbs','username')
         # Redefine scratchPath to include username.
         #self.scratchPath = os.path.join(self.policy.get('general','scratchPath'), username)
 

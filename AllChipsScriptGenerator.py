@@ -108,6 +108,65 @@ class AllChipsScriptGenerator:
         #
         # LSST-specific params
         #
+
+        self._readTrimfileAndCalculateParams(rx, ry, sx, sy, ex)
+
+        # Get non-default commands & extra ID
+        self.centid = '0'
+        self.extraidFile = extraidFile.strip()
+        if self.extraidFile != '':
+            for line in open(self.extraidFile).readlines():
+                if line.startswith('extraid'):
+                    name, self.extraid = line.split()
+                    print 'extraid:', self.extraid
+                    if self.extraid != '':
+                        self.obshistid = self.obshistid+self.extraid
+                if line.startswith('centroidfile'):
+                    name, self.centid = line.split()
+        print 'Centroid FileID:', self.centid
+
+
+        # SET USEFUL DIRECTORY PATHS
+
+        """
+
+        Make directories to store the logfiles and parameter files for
+        each job.  Best practice on Minerva Cluster is to write log
+        files (and data files) to a shared directory as opposed to
+        writing them back to your home directory.
+
+        These are the paths to your SAVE, LOGS, CENTROID, and PARAMETER
+        directories.  This directory holds the log files for each job,
+        a small gzipped file of common data for the visit, and a
+        directory with the parameter files needed for each job.
+
+        """
+
+        filtmap = {"0":"u", "1":"g", "2":"r", "3":"i", "4":"z", "5":"y"}
+        self.filter = filtmap[self.filt]
+        visitID = '%s-f%s' %(self.obshistid, self.filter)
+        # Output files from the "visit" preprocessing stage are staged to visitSavePath
+        self.stagePath2 = os.path.join(self.stagePath2, visitID)
+        self.paramDir = os.path.join(self.stagePath2, 'run%s' %(self.obshistid))
+        # The logs go into the savePath, however.
+        self.logPath = os.path.join(self.savePath, visitID, "logs")
+        # NOTE: This might not be in the right location, but I never ran with self.centid==1.
+        self.centroidPath = os.path.join(self.stagePath, 'imSim/PT1.2/centroid/v%s-f%s' %(self.obshistid, self.filter))
+        self._makePaths()
+
+        # Parameter File Names
+        self.obsCatFile = 'objectcatalog_%s.pars' %(self.obshistid)
+        self.obsParFile = 'obs_%s.pars' %(self.obshistid)
+        self.atmoParFile = 'atmosphere_%s.pars' %(self.obshistid)
+        self.atmoRaytraceFile = 'atmosphereraytrace_%s.pars' %(self.obshistid)
+        self.cloudRaytraceFile = 'cloudraytrace_%s.pars' %(self.obshistid)
+        self.opticsParFile = 'optics_%s.pars' %(self.obshistid)
+        self.catListFile = 'catlist_%s.pars' %(self.obshistid)
+        self.trackingParFile = 'tracking_%s.pars' %(self.obshistid)
+
+        return
+
+    def _readTrimfileAndCalculateParams(self, rx, ry, sx, sy, ex):
         self.myrx = rx
         self.myry = ry
         self.mysx = sx
@@ -186,20 +245,6 @@ class AllChipsScriptGenerator:
                 name, self.vistime = line.split()
                 print 'Sim_Vistime: ', self.vistime
 
-        # Get non-default commands & extra ID
-        self.centid = '0'
-        self.extraidFile = extraidFile.strip()
-        if self.extraidFile != '':
-            for line in open(self.extraidFile).readlines():
-                if line.startswith('extraid'):
-                    name, self.extraid = line.split()
-                    print 'extraid:', self.extraid
-                    if self.extraid != '':
-                        self.obshistid = self.obshistid+self.extraid
-                if line.startswith('centroidfile'):
-                    name, self.centid = line.split()
-        print 'Centroid FileID:', self.centid
-
         # Calculated Parameters
         tempDate = datetime.date.today()
         sDate = str(tempDate)
@@ -230,33 +275,9 @@ class AllChipsScriptGenerator:
        	self.minsource = int(self.minsource)
 	self.minsource += 1
         self.ncat = 0
+        return
 
-        # SET USEFUL DIRECTORY PATHS
-
-        """
-
-        Make directories to store the logfiles and parameter files for
-        each job.  Best practice on Minerva Cluster is to write log
-        files (and data files) to a shared directory as opposed to
-        writing them back to your home directory.
-
-        These are the paths to your SAVE, LOGS, CENTROID, and PARAMETER
-        directories.  This directory holds the log files for each job,
-        a small gzipped file of common data for the visit, and a
-        directory with the parameter files needed for each job.
-
-        """
-
-        filtmap = {"0":"u", "1":"g", "2":"r", "3":"i", "4":"z", "5":"y"}
-        self.filter = filtmap[self.filt]
-        visitID = '%s-f%s' %(self.obshistid, self.filter)
-        # Output files from the "visit" preprocessing stage are staged to visitSavePath
-        self.stagePath2 = os.path.join(self.stagePath2, visitID)
-        self.paramDir = os.path.join(self.stagePath2, 'run%s' %(self.obshistid))
-        # The logs go into the savePath, however.
-        self.logPath = os.path.join(self.savePath, visitID, "logs")
-        # NOTE: This might not be in the right location, but I never ran with self.centid==1.
-        self.centroidPath = os.path.join(self.stagePath, 'imSim/PT1.2/centroid/v%s-f%s' %(self.obshistid, self.filter))
+    def _makePaths(self):
         if not os.path.isdir(self.logPath):
             try:
                 os.makedirs(self.logPath)
@@ -278,17 +299,6 @@ class AllChipsScriptGenerator:
                 except OSError:
                     pass
             print 'Your centroid directory is %s' %(self.centroidPath)
-
-
-        # Parameter File Names
-        self.obsCatFile = 'objectcatalog_%s.pars' %(self.obshistid)
-        self.obsParFile = 'obs_%s.pars' %(self.obshistid)
-        self.atmoParFile = 'atmosphere_%s.pars' %(self.obshistid)
-        self.atmoRaytraceFile = 'atmosphereraytrace_%s.pars' %(self.obshistid)
-        self.cloudRaytraceFile = 'cloudraytrace_%s.pars' %(self.obshistid)
-        self.opticsParFile = 'optics_%s.pars' %(self.obshistid)
-        self.catListFile = 'catlist_%s.pars' %(self.obshistid)
-        self.trackingParFile = 'tracking_%s.pars' %(self.obshistid)
 
         return
 

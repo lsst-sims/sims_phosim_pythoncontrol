@@ -37,10 +37,6 @@ class SingleChipScriptGenerator(AbstractScriptGenerator):
     """
     def __init__(self, policy, obshistid, filter, filt, centid, centroidPath,
                  stagePath2, paramDir, trackingParFile):
-        """
-        NTS: For PBS derived class, refine scratchPath as follows:
-
-        """
 
         self.policy = policy
         self.obshistid = obshistid
