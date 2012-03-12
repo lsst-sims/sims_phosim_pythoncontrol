@@ -39,7 +39,8 @@ class MockSingleChipScriptGenerator_Pbs(SingleChipScriptGenerator_Pbs):
 class TestSingleChipScriptGenerator(unittest.TestCase):
 
   def _SetupWorkstation(self):
-    self.imsimConfigFile = 'imsimConfig_workstation.cfg'
+    self.baseDir = os.path.dirname(__file__)
+    self.imsimConfigFile = os.path.join(self.baseDir, 'imsimConfig_workstation.cfg')
     self.scheduler = 'csh'
     self.policy = ConfigParser.RawConfigParser()
     self.policy.read(self.imsimConfigFile)
@@ -72,7 +73,7 @@ class TestSingleChipScriptGenerator(unittest.TestCase):
 
   def _SetupPbs(self):
     self._SetupWorkstation()
-    self.imsimConfigFile = 'imsimConfig_minerva.cfg'
+    self.imsimConfigFile = os.path.join(self.baseDir, 'imsimConfig_minerva.cfg')
     self.scheduler = 'pbs'
     self.policy = ConfigParser.RawConfigParser()
     self.policy.read(self.imsimConfigFile)

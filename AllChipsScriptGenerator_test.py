@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python2.6
 import os
 import unittest
 from AllChipsScriptGenerator import *
@@ -39,8 +39,9 @@ class MockAllChipsScriptGenerator_Pbs(AllChipsScriptGenerator_Pbs):
 class TestAllChipsScriptGenerator(unittest.TestCase):
 
   def _SetupWorkstation(self):
-    self.imsimConfigFile = 'imsimConfig_workstation.cfg'
-    self.extraidFile = 'clouds'
+    self.baseDir = os.path.dirname(__file__)
+    self.imsimConfigFile = os.path.join(self.baseDir, 'imsimConfig_workstation.cfg')
+    self.extraidFile = os.path.join(self.baseDir, 'clouds')
     self.scheduler = 'csh'
     self.policy = ConfigParser.RawConfigParser()
     self.policy.read(self.imsimConfigFile)
@@ -70,7 +71,7 @@ class TestAllChipsScriptGenerator(unittest.TestCase):
 
   def _SetupPbs(self):
     self._SetupWorkstation()
-    self.imsimConfigFile = 'imsimConfig_minerva.cfg'
+    self.imsimConfigFile = os.path.join(self.baseDir, 'imsimConfig_minerva.cfg')
     self.scheduler = 'pbs'
     self.policy = ConfigParser.RawConfigParser()
     self.policy.read(self.imsimConfigFile)

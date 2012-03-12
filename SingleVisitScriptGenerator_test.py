@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python2.6
 import os
 import unittest
 from SingleVisitScriptGenerator import *
@@ -23,8 +23,9 @@ class MockSingleVisitScriptGenerator_Pbs(SingleVisitScriptGenerator_Pbs):
 class TestSingleVisitScriptGenerator(unittest.TestCase):
 
   def _SetupWorkstation(self):
-    self.imsimConfigFile = 'imsimConfig_workstation.cfg'
-    self.extraidFile = 'clouds'
+    self.baseDir = os.path.dirname(__file__)
+    self.imsimConfigFile = os.path.join(self.baseDir, 'imsimConfig_workstation.cfg')
+    self.extraidFile = os.path.join(self.baseDir, 'clouds')
     self.scheduler = 'csh'
     self.policy = ConfigParser.RawConfigParser()
     self.policy.read(self.imsimConfigFile)
@@ -48,8 +49,8 @@ class TestSingleVisitScriptGenerator(unittest.TestCase):
     self.assertEquals(s.revision, 'vTest')
 
   def _SetupPbs(self):
-    self.imsimConfigFile = 'imsimConfig_minerva.cfg'
-    self.extraidFile = 'clouds'
+    self._SetupWorkstation()
+    self.imsimConfigFile = os.path.join(self.baseDir, 'imsimConfig_minerva.cfg')
     self.scheduler = 'pbs'
     self.policy = ConfigParser.RawConfigParser()
     self.policy.read(self.imsimConfigFile)

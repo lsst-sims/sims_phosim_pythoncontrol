@@ -1,8 +1,9 @@
-#!/usr/bin/python
+#!/usr/bin/python2.6
 import os
 import unittest
 from AllVisitsScriptGenerator import *
 from optparse import OptionParser
+
 
 class MockAllVisitsScriptGenerator(AllVisitsScriptGenerator):
   def _loadTrimfileList(self, myfile):
@@ -25,8 +26,9 @@ class MockAllVisitsScriptGenerator_Pbs(AllVisitsScriptGenerator_Pbs):
 class TestAllVisitsScriptGenerator(unittest.TestCase):
 
   def _SetupWorkstation(self):
-    self.imsimConfigFile = 'imsimConfig_workstation.cfg'
-    self.extraidFile = 'clouds'
+    self.baseDir = os.path.dirname(__file__)
+    self.imsimConfigFile = os.path.join(self.baseDir, 'imsimConfig_workstation.cfg')
+    self.extraidFile = os.path.join(self.baseDir, 'clouds')
     self.scheduler = 'csh'
     self.policy = ConfigParser.RawConfigParser()
     self.policy.read(self.imsimConfigFile)
@@ -48,8 +50,8 @@ class TestAllVisitsScriptGenerator(unittest.TestCase):
       raise
 
   def _SetupPbs(self):
-    self.imsimConfigFile = 'imsimConfig_minerva.cfg'
-    self.extraidFile = 'clouds'
+    self._SetupWorkstation()
+    self.imsimConfigFile = os.path.join(self.baseDir, 'imsimConfig_minerva.cfg')
     self.scheduler = 'pbs'
     self.policy = ConfigParser.RawConfigParser()
     self.policy.read(self.imsimConfigFile)
