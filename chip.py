@@ -1,4 +1,4 @@
-#!/share/apps/lsst_gcc440/Linux64/external/python/2.5.2/bin/python
+#!/usr/bin/python2.6
 
 """
 

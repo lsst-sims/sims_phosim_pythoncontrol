@@ -1052,10 +1052,11 @@ class AllChipsScriptGenerator:
         return
 
     def cleanupFitsFiles(self):
-        print 'Moving FITS files to %s.' %(self.paramDir)
+        #print 'Moving FITS files to %s.' %(self.paramDir)
+        print 'Deleting FITS files'
         for fits in glob.glob('*.fits'):
           # Using copyfile instead of move will overwrite the destination if already present
-          shutil.copy(fits, '%s' %(self.paramDir))
+          #shutil.copy(fits, '%s' %(self.paramDir))
           os.remove(fits)
         return
 
