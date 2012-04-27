@@ -1,5 +1,4 @@
 #!/usr/bin/python
-###################!/share/apps/lsst_gcc440/Linux64/external/python/2.5.2/bin/python
 
 """
 Brief:   Generates a script for doing the preprocessing steps for a single obsHistID.
@@ -34,11 +33,12 @@ class SingleVisitScriptGenerator(AbstractScriptGenerator):
     variables change per visit.
     """
     def __init__(self, scriptInvocationPath, scriptOutList, policy, imsimConfigFile, extraIdFile,
-                 sourceFileTgzName, execFileTgzName, controlFileTgzName):
+                 sourceFileTgzName, execFileTgzName, controlFileTgzName, tmpdir):
 
         self._loadEnvironmentVars()
         self.imsimConfigFile = imsimConfigFile
         self.extraIdFile = extraIdFile
+        self.tmpdir = tmpdir
         self.sourceFileTgzName = sourceFileTgzName
         self.execFileTgzName = execFileTgzName
         self.controlFileTgzName = controlFileTgzName
@@ -57,9 +57,6 @@ class SingleVisitScriptGenerator(AbstractScriptGenerator):
         #policy   = pexPolicy.Policy.createPolicy(imsimPolicy)
         self.pythonExec = self.policy.get('general','python-exec')
         # Job params
-        self.numNodes = self.policy.get('general','numNodes')
-        self.processors = self.policy.get('general','processors')
-        self.pmem = self.policy.get('general','pmem')
         self.jobName = self.policy.get('general','jobname')
         self.debugLevel = self.policy.getint('general','debuglevel')
         self.sleepMax = self.policy.getint('general','sleepmax')
@@ -118,9 +115,8 @@ class SingleVisitScriptGenerator(AbstractScriptGenerator):
         objhistid + filter
 
         """
-        scriptFileName = self.jobFileName(obsHistID, filt)
-        # Get rid of any extraneous copies of the script file in the invocation
-        # directory.  These should only be there if the script aborted.
+        scriptFileName = os.path.join(self.tmpdir, self.jobFileName(obsHistID, filt))
+        print 'scriptFileName:', scriptFileName
         if os.path.isfile(scriptFileName):
             os.remove(scriptFileName)
 
@@ -136,7 +132,8 @@ class SingleVisitScriptGenerator(AbstractScriptGenerator):
 
         self.stageFiles(trimfileName, trimfileBasename, trimfilePath,
                         filt, filter, obsHistID, origObsHistID,
-                        scriptFileName, self.scriptOutList, visitDir)
+                        scriptFileName, self.scriptOutList, visitDir,
+                        visitLogPath)
 
 
     def writeHeader(self, scriptFileName, visitDir, filter, obsHistID, visitLogPath):
@@ -254,58 +251,70 @@ class SingleVisitScriptGenerator(AbstractScriptGenerator):
             sys.exit()
         return
 
-
+    def _copyAndRemoveFile(self, source, dest):
+      shutil.copy(source, dest)
+      os.remove(source)
+      return
 
     def stageFiles(self, trimfileAbsName, trimfileBasename, trimfilePath,
                    filt, filter, obshistid, origObshistid,
-                   scriptFileName, scriptOutList, visitDir):
+                   scriptFileName, scriptOutList, visitDir, visitLogPath):
         stagePath = self.stagePath
         # We should be in the script's invocation directory
         assert os.getcwd() == self.scriptInvocationPath
         # Move the visit and script files to stagedir.
         print 'Moving Exec, Visit & Script Files to %s:' %(stagePath)
         # Use shutil.copy instead of shutil.move because the former overwrites
-        shutil.copy(self.sourceFileTgzName, stagePath)
-        os.remove(self.sourceFileTgzName)
-        shutil.copy(self.execFileTgzName, stagePath)
-        os.remove(self.execFileTgzName)
-        shutil.copy(self.controlFileTgzName, stagePath)
-        os.remove(self.controlFileTgzName)
-        shutil.copy(scriptFileName, stagePath)
-        os.remove(scriptFileName)
-        os.chmod(os.path.join(stagePath,scriptFileName), 0775)
+        self.__copyAndRemoveFile(os.path.join(self.tmpdir, self.sourceFileTgzName), stagePath)
+        self.__copyAndRemoveFile(os.path.join(self.tmpdir, self.execFileTgzName), stagePath)
+        self.__copyAndRemoveFile(os.path.join(self.tmpdir, self.controlFileTgzName), stagePath)
+        os.chmod(scriptFileName, 0775)
+        self.__copyAndRemoveFile(scriptFileName, stagePath)
 
 
         # Also stage the trimfiles to stagePath/visitDir/trimfiles/
         trimfileStagePath = os.path.join(stagePath, 'trimfiles', visitDir)
-        print 'Staging trimfile %s to %s:' %(trimfileAbsName, trimfileStagePath)
+        # If the directory already exists, don't bother staging
         if not os.path.isdir(trimfileStagePath):
+            print 'Staging trimfile %s to %s:' %(trimfileAbsName, trimfileStagePath)
             print 'Making trimfile stage path: %s' %(trimfileStagePath)
-            os.mkdir(trimfileStagePath)
-        shutil.copy(trimfileAbsName, trimfileStagePath)
-        # Make sure that there is at least one "includeobj" line in trimfile
-        cmd = ('grep includeobj %s' %(trimfileAbsName))
-        p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, close_fds=True)
-        results = p.stdout.readlines()
-        p.stdout.close()
-        nincobj = len(results)
-        # If so, stage the files in the pops directory for this object
-        if nincobj > 0:
-            popsPath = os.path.join(trimfilePath, 'pops') # Orig location for 'pops' dir
-            dest = '%s/pops' %(trimfileStagePath)
-            os.mkdir(dest)  # Create dest dir
-            # Copy the file glob with origObshistid
-            for singleFile in glob.glob('%s/*%s*' %(popsPath, origObshistid)):
-                print '   Moving %s to %s/pops' %(singleFile, dest)
-                shutil.copy(singleFile, dest)
+            os.mkdirs(trimfileStagePath)
+            shutil.copy(trimfileAbsName, trimfileStagePath)
+            # Make sure that there is at least one "includeobj" line in trimfile
+            cmd = ('grep includeobj %s' %(trimfileAbsName))
+            p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, close_fds=True)
+            results = p.stdout.readlines()
+            p.stdout.close()
+            nincobj = len(results)
+            # If so, stage the files in the pops directory for this object
+            if nincobj > 0:
+                popsPath = os.path.join(trimfilePath, 'pops') # Orig location for 'pops' dir
+                dest = '%s/pops' %(trimfileStagePath)
+                os.mkdir(dest)  # Create dest dir
+                # Copy the file glob with origObshistid
+                for singleFile in glob.glob('%s/*%s*' %(popsPath, origObshistid)):
+                    print '   Moving %s to %s/pops' %(singleFile, dest)
+                    shutil.copy(singleFile, dest)
+        else:
+            print 'Staging directory', trimfileStagePath, 'already exists...'
+            print '...Assuming trimfile is already present.'
 
+        self._writeScriptOutList(scriptOutList, scriptFileName, stagePath, visitLogPath)
+        return
+
+    def _writeScriptOutList(self, scriptOutList, scriptFileName, stagePath, visitLogPath):
         # Generate the list of job scripts for the ray tracing and post processing
-        fileDest = os.path.join(stagePath, scriptFileName)
+        fileDest = os.path.join(stagePath, os.path.basename(scriptFileName))
         print 'Attempting to add %s to file %s in %s' %(fileDest, scriptOutList,
                                                         self.scriptInvocationPath)
         #os.chdir(self.imsimSourcePath)  Now created in scriptInvocationPath
-        with file(scriptOutList, 'a') as parFile:
-            parFile.write('%s \n' %(fileDest))
+        try:
+            with file(scriptOutList, 'a') as parFile:
+                parFile.write('%s \n' %(fileDest))
+        except IOError:
+            print "Could not open %s in writeScriptOutList." % parFile
+            sys.exit()
+        return
 
 
 

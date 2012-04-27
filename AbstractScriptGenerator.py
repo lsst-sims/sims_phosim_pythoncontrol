@@ -1,5 +1,4 @@
 #!/usr/bin/python
-################!/share/apps/lsst_gcc440/Linux64/external/python/2.5.2/bin/python
 
 """
 Brief:   Python script to generate a PBS file for each instance

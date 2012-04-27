@@ -1,5 +1,4 @@
 #!/usr/bin/python
-#############!/share/apps/lsst_gcc440/Linux64/external/python/2.5.2/bin/python
 
 """
 Brief:   Main classes for generating the the shell scripts for all of
@@ -12,11 +11,10 @@ Authors: Nicole Silvestri, U. Washington, nms@astro.washington.edu
 """
 
 from __future__ import with_statement
-import os, re, sys
-import random
+import os
 import subprocess
 import shutil
-import glob
+import tempfile
 
 #import lsst.pex.policy as pexPolicy
 import ConfigParser
@@ -39,6 +37,10 @@ class AllVisitsScriptGenerator:
 
         self.policy = policy
 
+        # Create a temporary directory in which to assemble tar files
+        self.tmpdir = tempfile.mkdtemp()
+        print 'self.tmpdir:', self.tmpdir
+
         # We want to track the path where the script was originally
         # invoked because we will have to cd to other directories
         # temporarily.
@@ -51,9 +53,6 @@ class AllVisitsScriptGenerator:
 
         #policy   = pexPolicy.Policy.createPolicy(imsimPolicy)
         # Job params
-        self.numNodes = self.policy.get('general','numNodes')
-        self.processors = self.policy.get('general','processors')
-        self.pmem = self.policy.get('general','pmem')
         self.jobName = self.policy.get('general','jobname')
         # Directories and filenames
         #self.scratchPath = self.policy.get('general','scratchExecPath')
@@ -79,10 +78,15 @@ class AllVisitsScriptGenerator:
                     name, extraid_tmp = line.split()
                     print 'extraid:', extraid_tmp
                     if extraid_tmp != '':
-                        #JPG: Note that this is a string addition operator
+                        #Note that this is a string addition operator
                         self.extraid = self.extraid + extraid_tmp
         print 'Final extraid:', self.extraid
 
+
+    def __del__(self):
+      # We are responsible for removing the temp dir
+      shutil.rmtree(self.tmpdir)
+      return
 
     def _loadEnvironmentVars(self):
         self.imsimSourcePath = os.getenv("IMSIM_SOURCE_PATH")
@@ -112,16 +116,11 @@ class AllVisitsScriptGenerator:
         self.checkDirectories()
 
         # Remove the file containing the script names if it exists.
-        scriptOutList = 'visitScriptsToRun_%s.lis' %(self.extraIdFile)
-        scriptFile = os.path.join(self.scriptInvocationPath, scriptOutList)
-        if os.path.isfile(scriptFile):
-            try:
-                os.remove(scriptFile)
-            except OSError:
-                pass
+        scriptOutList = 'visitScriptsToRun_%s.lis' %(os.path.basename(self.extraIdFile))
 
         # Note that tarExecFiles() needs to be called before initializing
         # SingleVisitScriptGenerator because it defines self.execFileTgzName
+        # Same with tarSourceFiles() and tarControlFiles().
         self.tarSourceFiles()
         self.tarExecFiles()
         self.tarControlFiles()
@@ -130,12 +129,13 @@ class AllVisitsScriptGenerator:
         scriptGen = SingleVisitScriptGenerator(self.scriptInvocationPath, scriptOutList, self.policy,
                                                self.imsimConfigFile, self.extraIdFile,
                                                self.sourceFileTgzName, self.execFileTgzName,
-                                               self.controlFileTgzName)
+                                               self.controlFileTgzName, self.tmpdir)
 
+        visitDirList = []
         for trimfileName in self.trimfileList:
             trimfileName = trimfileName.strip()
-            self.processTrimFile(scriptGen, trimfileName)
-        return
+            visitDirList.append(self.processTrimFile(scriptGen, trimfileName))
+        return visitDirList
 
 
     def processTrimFile(self, scriptGen, trimfileName):
@@ -178,7 +178,7 @@ class AllVisitsScriptGenerator:
         scriptGen.makeScript(obshistid, origObshistid, trimfileName, trimfileBasename,
                              trimfilePath, filt, filter, visitDir, visitLogPath)
         #self.scriptWriter(trimfileName, trimfileBasename, trimfilePath, filt, filter, obshistid, origObshistid)
-        return
+        return visitDir
 
     def checkDirectories(self):
         # Checks directories accessible from the client that are used for all visits
@@ -243,8 +243,6 @@ class AllVisitsScriptGenerator:
         """
         Tar all the files in the source tree that are not executables.
         None of the files in the source tree should be visit-dependent.
-        NOTE TO SELF: Possibly use random file name to avoid collision
-                      with other script invocations.
         """
         self.sourceFileTgzName = 'imsimSourceFiles.tar.gz'
         os.chdir(self.imsimSourcePath)
@@ -252,7 +250,7 @@ class AllVisitsScriptGenerator:
         # Got rid of raytrace/setup:
         #cmd = 'tar czvf %s ancillary/atmosphere_parameters/* ancillary/atmosphere/cloud ancillary/atmosphere/turb2d ancillary/optics_parameters/optics_parameters ancillary/optics_parameters/control ancillary/trim/trim ancillary/Add_Background/add_background ancillary/Add_Background/filter_constants* ancillary/Add_Background/fits_files ancillary/Add_Background/SEDs/*.txt ancillary/Add_Background/update_filter_constants ancillary/Add_Background/vignetting_*.txt ancillary/cosmic_rays/create_rays ancillary/cosmic_rays/iray_textfiles/iray* ancillary/e2adc/e2adc ancillary/tracking/tracking raytrace/lsst raytrace/*.txt raytrace/version pbs/distributeFiles.py' %(self.execFileTgzName)
         # Moved exec files out of this tar file.
-        cmd = 'tar czvf %s ancillary/atmosphere_parameters/*.txt  ancillary/optics_parameters/control  ancillary/Add_Background/filter_constants* ancillary/Add_Background/fits_files ancillary/Add_Background/SEDs/*.txt ancillary/Add_Background/vignetting_*.txt ancillary/cosmic_rays/iray_textfiles/iray* raytrace/*.txt raytrace/version pbs/distributeFiles.py' % os.path.join(self.scriptInvocationPath, self.sourceFileTgzName)
+        cmd = 'tar czf %s ancillary/atmosphere_parameters/*.txt  ancillary/optics_parameters/control  ancillary/Add_Background/filter_constants* ancillary/Add_Background/fits_files ancillary/Add_Background/SEDs/*.txt ancillary/Add_Background/vignetting_*.txt ancillary/cosmic_rays/iray_textfiles/iray* raytrace/*.txt raytrace/version pbs/distributeFiles.py' % os.path.join(self.tmpdir, self.sourceFileTgzName)
         print 'Tarring all source files.'
         subprocess.check_call(cmd, shell=True)
         # cd back to the invocation directory
@@ -271,7 +269,7 @@ class AllVisitsScriptGenerator:
         self.execFileTgzName = 'imsimExecFiles.tar.gz'
         os.chdir(self.imsimExecPath)
         # Explicitly packaged
-        cmd = 'tar czvf %s ancillary/atmosphere_parameters/create_atmosphere ancillary/atmosphere/cloud ancillary/atmosphere/turb2d ancillary/optics_parameters/optics_parameters ancillary/trim/trim ancillary/Add_Background/add_background ancillary/Add_Background/update_filter_constants ancillary/cosmic_rays/create_rays ancillary/e2adc/e2adc ancillary/tracking/tracking raytrace/lsst' % os.path.join(self.scriptInvocationPath, self.execFileTgzName)
+        cmd = 'tar czf %s ancillary/atmosphere_parameters/create_atmosphere ancillary/atmosphere/cloud ancillary/atmosphere/turb2d ancillary/optics_parameters/optics_parameters ancillary/trim/trim ancillary/Add_Background/add_background ancillary/Add_Background/update_filter_constants ancillary/cosmic_rays/create_rays ancillary/e2adc/e2adc ancillary/tracking/tracking raytrace/lsst' % os.path.join(self.tmpdir, self.execFileTgzName)
         print 'Tarring all exec files.'
         subprocess.check_call(cmd, shell=True)
 
@@ -298,7 +296,9 @@ class AllVisitsScriptGenerator:
         # We should be in the script's invocation directory
         assert os.getcwd() == self.scriptInvocationPath
 
-        cmd = 'tar czvf %s chip.py fullFocalplane.py AbstractScriptGenerator.py AllChipsScriptGenerator.py SingleChipScriptGenerator.py %s %s' %(self.controlFileTgzName, self.imsimConfigFile, self.extraIdFile)
+        cmd =  'tar czvf %s ' % os.path.join(self.tmpdir, self.controlFileTgzName)
+        cmd += ' chip.py fullFocalplane.py AbstractScriptGenerator.py AllChipsScriptGenerator.py'
+        cmd += ' SingleChipScriptGenerator.py %s %s' %(self.imsimConfigFile, self.extraIdFile)
 
         print 'Tarring control and param files that will be copied to the execution node(s).'
         subprocess.check_call(cmd, shell=True)
@@ -366,12 +366,6 @@ class AllVisitsScriptGenerator_Pbs(AllVisitsScriptGenerator):
 
         # Remove the file containing the script names if it exists.
         scriptOutList = 'visitScriptsToRun_%s.lis' %(self.extraIdFile)
-        scriptFile = os.path.join(self.scriptInvocationPath, scriptOutList)
-        if os.path.isfile(scriptFile):
-            try:
-                os.remove(scriptFile)
-            except OSError:
-                pass
 
         # Note that tarExecFiles() needs to be called before initializing
         # SingleVisitScriptGenerator because it defines self.execFileTgzName

@@ -1,5 +1,4 @@
 #!/usr/bin/python
-############!/share/apps/lsst_gcc440/Linux64/external/python/2.5.2/bin/python
 
 """
 Brief:   This class sets generates all of the scripts needed for the ray-tracing
@@ -93,9 +92,6 @@ class AllChipsScriptGenerator:
         #self.policy = ConfigParser.RawConfigParser()
         #self.policy.read(imsimPolicyFile)
         # Job params
-        self.numNodes = self.policy.get('general','numNodes')
-        self.processors = self.policy.get('general','processors')
-        self.pmem = self.policy.get('general','pmem')
         self.jobName = self.policy.get('general','jobname')
         # Directories and filenames
         #self.scratchPath = self.policy.get('general','scratchPath')
@@ -152,7 +148,6 @@ class AllChipsScriptGenerator:
         self.logPath = os.path.join(self.savePath, visitID, "logs")
         # NOTE: This might not be in the right location, but I never ran with self.centid==1.
         self.centroidPath = os.path.join(self.stagePath, 'imSim/PT1.2/centroid/v%s-f%s' %(self.obshistid, self.filter))
-        self._makePaths()
 
         # Parameter File Names
         self.obsCatFile = 'objectcatalog_%s.pars' %(self.obshistid)
@@ -279,17 +274,11 @@ class AllChipsScriptGenerator:
 
     def _makePaths(self):
         if not os.path.isdir(self.logPath):
-            try:
-                os.makedirs(self.logPath)
-            except OSError:
-                pass
+          os.makedirs(self.logPath)
         print 'Your logfile directory is: ', self.logPath
 
         if not os.path.isdir(self.paramDir):
-            try:
-                os.makedirs(self.paramDir)
-            except OSError:
-                pass
+          os.makedirs(self.paramDir)
         print 'Your parameter staging directory is: ', self.paramDir
 
         if self.centid == '1':
@@ -308,6 +297,7 @@ class AllChipsScriptGenerator:
         This is the main worker routine.  It just goes through and calls
         all of Nicole's original functions.
         """
+        self._makePaths()
         self.writeObsCatParams()
         self.generateAtmosphericParams()
         wav = self.generateAtmosphericScreen()
@@ -999,6 +989,7 @@ class AllChipsScriptGenerator:
             # running in single chip mode.
 
             print 'Tarring all redundant files that will be copied to the local cluster nodes.'
+            nodeFilesTar = 'nodeFiles%s.tar' % self.obshistid
 
             os.chdir('%s' %(self.workDir))
             # Files needed for ancillary/atmosphere
@@ -1008,7 +999,7 @@ class AllChipsScriptGenerator:
 
             # Files for ancillary/Add_Background
             print 'Tarring ancillary/Add_Background/ files.'
-            shutil.move('nodeFiles%s.tar' %(self.obshistid), 'ancillary/Add_Background')
+            shutil.move(nodeFilesTar, 'ancillary/Add_Background')
             os.chdir('ancillary/Add_Background')
             shutil.copy('SEDs/darksky_sed.txt', '.')
             shutil.copy('SEDs/lunar_sed.txt', '.')
@@ -1020,38 +1011,44 @@ class AllChipsScriptGenerator:
             os.remove('sed_dome.txt')
 
             # Executables and binaries files for running on nodes.
-            print 'Tarring binaries/executables.'
-            shutil.move('nodeFiles%s.tar' %(self.obshistid), '../../')
+            shutil.move(nodeFilesTar, '../../')
             os.chdir('../../')
-            #cmd = 'tar rvf nodeFiles%s.tar ancillary/trim/trim ancillary/Add_Background/* ancillary/cosmic_rays/* ancillary/e2adc/e2adc raytrace/lsst raytrace/*.txt  raytrace/version raytrace/setup pbs/distributeFiles.py chip.py' %(self.obshistid)
-            cmd = 'tar rvf nodeFiles%s.tar ancillary/trim/trim ancillary/Add_Background/* ancillary/cosmic_rays/* ancillary/e2adc/e2adc raytrace/lsst raytrace/*.txt  raytrace/version pbs/distributeFiles.py chip.py' %(self.obshistid)
-            subprocess.check_call(cmd, shell=True)
+            self._tarExecFiles(nodeFilesTar)
 
             # Zip the tar file.
-            print 'Gzipping nodeFiles%s.tar file' %(self.obshistid)
-            cmd = 'gzip nodeFiles%s.tar' %(self.obshistid)
+            print 'Gzipping %s' % nodeFilesTar
+            cmd = 'gzip %s' % nodeFilesTar
             subprocess.check_call(cmd, shell=True)
+            nodeFilesTar += '.gz'
             # Move to stagePath2
-            nodeFileName = 'nodeFiles%s.tar.gz' %(self.obshistid)
-            print 'Moving %s to %s/.' %(nodeFileName, self.stagePath2)
-            if os.path.isfile(os.path.join(self.stagePath2, nodeFileName)):
-              try:
-                os.remove(os.path.join(self.stagePath2, nodeFileName))
-              except OSError:
-                pass
-            shutil.move('nodeFiles%s.tar.gz' %(self.obshistid), '%s/' %(self.stagePath2)) 
+            self._stageNodeFilesTarball(nodeFilesTar)
 
         # Move the parameter, and fits files to the run directory.
-        self.cleanupFitsFiles()
-        self.cleanupParFiles()
-        self.cleanupSedFiles()
+        self._cleanupFitsFiles()
+        self._cleanupParFiles()
+        self._cleanupSedFiles()
 
         # Move the script files if created (i.e. not in single-chip mode)
         if self.myrx == '':
-            self.cleanupScriptFiles()
+            self._cleanupScriptFiles()
         return
 
-    def cleanupFitsFiles(self):
+    def _tarExecFiles(self, nodeFilesTar):
+        print 'Tarring binaries/executables.'
+        cmd = 'tar rvf %s ancillary/trim/trim ancillary/Add_Background/* ancillary/cosmic_rays/* ancillary/e2adc/e2adc raytrace/lsst raytrace/*.txt  raytrace/version pbs/distributeFiles.py chip.py' % nodeFilesTar
+        subprocess.check_call(cmd, shell=True)
+        return
+
+    def _stageNodeFilesTarball(self, nodeFilesTar):
+        print 'Moving %s to %s/.' %(nodeFilesTar, self.stagePath2)
+        if os.path.isfile(os.path.join(self.stagePath2, nodeFilesTar)):
+            try:
+                os.remove(os.path.join(self.stagePath2, nodeFilesTar))
+            except OSError:
+                pass
+        shutil.move('nodeFiles%s.tar.gz' %(self.obshistid), '%s/' %(self.stagePath2))
+
+    def _cleanupFitsFiles(self):
         #print 'Moving FITS files to %s.' %(self.paramDir)
         print 'Deleting FITS files'
         for fits in glob.glob('*.fits'):
@@ -1060,21 +1057,21 @@ class AllChipsScriptGenerator:
           os.remove(fits)
         return
 
-    def cleanupParFiles(self):
+    def _cleanupParFiles(self):
         print 'Moving .par files to %s.' %(self.paramDir)
         for pars in glob.glob('*.pars'):
           shutil.copy(pars, '%s' %(self.paramDir))
           os.remove(pars)
         return
 
-    def cleanupSedFiles(self):
+    def _cleanupSedFiles(self):
         print 'Moving sedlist_*.txt files to %s.' %(self.paramDir)
         for seds in glob.glob('sedlist_*.txt'):
           shutil.copy(seds, '%s' %(self.paramDir))
           os.remove(seds)
         return
 
-    def cleanupScriptFiles(self):
+    def _cleanupScriptFiles(self):
         # Deal with the script and command files if created (not single chip mode).
         for pbs in glob.glob('exec_%s_*.csh' %(self.obshistid)):
             shutil.copy(pbs, '%s' %(self.paramDir))
@@ -1129,7 +1126,7 @@ class AllChipsScriptGenerator_Pbs(AllChipsScriptGenerator):
         self.loopOverChips(scriptGen, wav)
         self.cleanup()
 
-    def cleanupScriptFiles(self):
+    def _cleanupScriptFiles(self):
         # Deal with the pbs and command files if created (not single chip mode).
         for pbs in glob.glob('exec_%s_*.pbs' %(self.obshistid)):
             shutil.move(pbs, '%s' %(self.paramDir))
