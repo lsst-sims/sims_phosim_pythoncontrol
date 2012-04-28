@@ -52,3 +52,9 @@ v-2.1                  v-2.2.1    Reorganization in the handling of
 
 v-2.2 		       v-2.2.1    Addition of unit tests
 		mirrors/exacycle
+
+v-2.2.1                v-2.2.1    Minor tweaks and bug fixes.  Last
+                mirrors/exacycle  tag to work with ImSim v-2.2.1
+
+
+	
