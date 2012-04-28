@@ -226,17 +226,6 @@ class AllVisitsScriptGenerator:
             print '------Making visit log directory: %s' %(visitLogPath)
         except OSError:
             print OSError
-
-        print '--- Checking visit trimfile stage directory %s.' %(visitTrimfilePath)
-        if os.path.isdir(visitTrimfilePath):
-            print '------Removing visit trimfile stage directory: %s' %(visitTrimfilePath)
-            shutil.rmtree(visitTrimfilePath)
-        try:
-            os.makedirs(visitTrimfilePath)
-            print '------Making visit trimfile stage directory: %s' %(visitTrimfilePath)
-        except OSError:
-            print OSError
-
         return
 
     def tarSourceFiles(self):

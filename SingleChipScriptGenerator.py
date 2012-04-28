@@ -1,5 +1,4 @@
 #!/usr/bin/python
-#############!/share/apps/lsst_gcc440/Linux64/external/python/2.5.2/bin/python
 
 """
 Brief:   Generates the script for doing the raytracing and postprocessing
@@ -55,9 +54,9 @@ class SingleChipScriptGenerator(AbstractScriptGenerator):
         self.useSharedData = self.policy.getboolean('general','useSharedSEDs')
         self.tarball = self.policy.get('general','dataTarballSEDs')
         if self.useSharedData == True:
-          self.scratchSharedPath = self.policy.get('general','scratchDataPath')
-        else:
           self.scratchSharedPath = os.path.join(self.imsimDataPath,'sharedData')
+        else:
+          self.scratchSharedPath = self.policy.get('general','scratchDataPath')
         # writeCopySharedData() will check the existence of self.dataCheckDir
         # to determine if it needs to grab and untar self.tarball.
         self.dataCheckDir = 'data/focal_plane/sta_misalignments/qe_maps'
@@ -209,7 +208,7 @@ class SingleChipScriptGenerator(AbstractScriptGenerator):
                 # Set the soft link to the catalog directory
                 #
                 jobFile.write('echo Setting soft link to data directory. \n')
-                jobFile.write('ln -s %s/ data \n' %(os.path.join(self.scratchSharedPath, 'sharedData')))
+                jobFile.write('ln -s %s/ data \n' %self.scratchSharedPath)
                 #
                 # Create the scratch output directory
                 #

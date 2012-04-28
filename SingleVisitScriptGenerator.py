@@ -65,9 +65,9 @@ class SingleVisitScriptGenerator(AbstractScriptGenerator):
         self.useSharedData = self.policy.getboolean('general','useSharedPRE')
         self.tarball = self.policy.get('general','dataTarballPRE')
         if self.useSharedData == True:
-          self.scratchSharedPath = self.policy.get('general','scratchDataPath')
-        else:
           self.scratchSharedPath = os.path.join(self.imsimDataPath,'sharedData')
+        else:
+          self.scratchSharedPath = self.policy.get('general','scratchDataPath')
         # Directories and filenames
         self.scratchPath = self.policy.get('general','scratchExecPath')
         self.savePath  = self.policy.get('general','savePath')
@@ -207,7 +207,7 @@ class SingleVisitScriptGenerator(AbstractScriptGenerator):
                 # Set soft link to the catalog directory
                 #
                 cshOut.write('echo Setting soft link to data directory. \n')
-                cshOut.write('ln -s %s data \n' %(os.path.join(self.scratchSharedPath, 'sharedData')))
+                cshOut.write('ln -s %s data \n' %self.scratchSharedPath)
                 # scratchOutputPath gets made in fullFocalPlane
                 #cshOut.write('mkdir %s \n' %(self.scratchOutputPath))
 
@@ -265,11 +265,11 @@ class SingleVisitScriptGenerator(AbstractScriptGenerator):
         # Move the visit and script files to stagedir.
         print 'Moving Exec, Visit & Script Files to %s:' %(stagePath)
         # Use shutil.copy instead of shutil.move because the former overwrites
-        self.__copyAndRemoveFile(os.path.join(self.tmpdir, self.sourceFileTgzName), stagePath)
-        self.__copyAndRemoveFile(os.path.join(self.tmpdir, self.execFileTgzName), stagePath)
-        self.__copyAndRemoveFile(os.path.join(self.tmpdir, self.controlFileTgzName), stagePath)
+        self._copyAndRemoveFile(os.path.join(self.tmpdir, self.sourceFileTgzName), stagePath)
+        self._copyAndRemoveFile(os.path.join(self.tmpdir, self.execFileTgzName), stagePath)
+        self._copyAndRemoveFile(os.path.join(self.tmpdir, self.controlFileTgzName), stagePath)
         os.chmod(scriptFileName, 0775)
-        self.__copyAndRemoveFile(scriptFileName, stagePath)
+        self._copyAndRemoveFile(scriptFileName, stagePath)
 
 
         # Also stage the trimfiles to stagePath/visitDir/trimfiles/
@@ -278,7 +278,7 @@ class SingleVisitScriptGenerator(AbstractScriptGenerator):
         if not os.path.isdir(trimfileStagePath):
             print 'Staging trimfile %s to %s:' %(trimfileAbsName, trimfileStagePath)
             print 'Making trimfile stage path: %s' %(trimfileStagePath)
-            os.mkdirs(trimfileStagePath)
+            os.makedirs(trimfileStagePath)
             shutil.copy(trimfileAbsName, trimfileStagePath)
             # Make sure that there is at least one "includeobj" line in trimfile
             cmd = ('grep includeobj %s' %(trimfileAbsName))
