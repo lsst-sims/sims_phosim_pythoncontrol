@@ -49,6 +49,14 @@ import gzip
 #import lsst.pex.logging as pexLog
 #import lsst.pex.exceptions as pexExcept
 
+def readAmpList(filename, cid):
+    ampList = []
+    with open(filename, 'r') as ampFile:
+        for line in ampFile.readlines():
+            if line.startswith('%s_' %cid):
+                ampList.append(line.split()[0])
+    return ampList
+
 def makeChipImage(obshistid, filter, rx, ry, sx, sy, ex, datadir):
 
     """
@@ -58,19 +66,18 @@ def makeChipImage(obshistid, filter, rx, ry, sx, sy, ex, datadir):
     id  = 'R'+rx+ry+'_S'+sx+sy+'_E00'+ex
     cid = 'R'+rx+ry+'_S'+sx+sy
     
-    raytraceCmdFile   = 'raytrace_%s_%s.pars' %(obshistid, id)
-    #trimCatFile       = 'trimcatalog_%s_%s.pars' %(obshistid, cid)
+    lsstCmdFile       = 'lsst_%s_%s.pars' %(obshistid, id)
     trimCatFile       = 'trimcatalog_%s_%s.pars' %(obshistid, id)
-    raytraceParFile   = 'raytracecommands_%s_%s.pars' %(obshistid, id)
+    raytraceCmdFile   = 'raytracecommands_%s_%s.pars' %(obshistid, id)
     backgroundParFile = 'background_%s_%s.pars' %(obshistid, id) 
     cosmicParFile     = 'cosmic_%s_%s.pars' %(obshistid, id)  
     outputFile        = 'output_%s_%s.fits' %(obshistid, id)
 
     # RUN THE RAYTRACE
-    cmd = 'cat %s %s > %s' %(raytraceParFile, trimCatFile, raytraceCmdFile )
+    cmd = 'cat %s %s > %s' %(raytraceCmdFile, trimCatFile, lsstCmdFile )
     subprocess.check_call(cmd, shell=True)
     os.chdir('raytrace/')
-    cmd = './lsst < ../%s' %(raytraceCmdFile)
+    cmd = './lsst < ../%s' %(lsstCmdFile)
     subprocess.check_call(cmd, shell=True)
     os.chdir('..')
 
@@ -90,6 +97,8 @@ def makeChipImage(obshistid, filter, rx, ry, sx, sy, ex, datadir):
 ##    subprocess.check_call(cmd, shell=True)
 
     # ADD BACKGROUND
+    if not os.path.isdir('ancillary/Add_Background/fits_files'):
+        os.mkdir('ancillary/Add_Background/fits_files')
     shutil.move('raytrace/%s' %(image), 'ancillary/Add_Background/fits_files/%s' %(image))
     os.chdir('ancillary/Add_Background')
     cmd = './add_background < ../../%s' %(backgroundParFile)
@@ -111,47 +120,37 @@ def makeChipImage(obshistid, filter, rx, ry, sx, sy, ex, datadir):
 
     os.chdir('../..')
 
-    axList = ['_C0', '_C1']
-    ayList = ['0', '1', '2', '3', '4', '5', '6', '7']
-    for ax in axList:
-        for ay in ayList:
-            os.chdir('ancillary/e2adc')
 
-            eadc = 'e2adc_%s_%s%s%s_E00%s.pars' %(obshistid, cid, ax, ay, ex)
-            imsim = 'imsim_%s_%s%s%s_E00%s.fits' %(obshistid, cid, ax, ay, ex)
-            imsimFilter = 'imsim_%s_f%s_%s%s%s_E00%s.fits.gz' %(obshistid, filter, cid, ax, ay, ex)
+    # RUN E2ADC CONVERTER
+    ampList = readAmpList('lsst/segmentation.txt', cid)
+    os.chdir('ancillary/e2adc')
+    eadc = 'e2adc_%s_%s.pars' %(obshistid, id)
+    print 'Running ./e2adc < ../../%s' %(eadc)
+    cmd = './e2adc < ../../%s' %(eadc)
+    subprocess.check_call(cmd, shell=True)
 
-            # RUN E2ADC CONVERTER
-            print 'Running ./e2adc < ../../%s' %(eadc)
-            cmd = './e2adc < ../../%s' %(eadc)
-            subprocess.check_call(cmd, shell=True)
-
-            shutil.move(imsim, '../../')
-            os.chdir('../..')
-
-            f_in = open(imsim, 'rb')
-            f_out = gzip.open('%s.gz' %(imsim), 'wb')
-            f_out.writelines(f_in)
-            f_out.close()
-            f_in.close()
-
-            shutil.move('%s.gz' %(imsim), '%s/%s' %(datadir, imsimFilter))
-
-##     # CLEAN UP
-##     axList = ['_C0', '_C1']
-##     ayList = ['0', '1', '2', '3', '4', '5', '6', '7']
-##     for ax in axList:
-##         for ay in ayList:
-##             os.remove('%s' %(eadc))
-
+    print 'From %s:' %os.getcwd()
+    for aid in ampList:
+        imsim = 'imsim_%s_%s_E00%s.fits' %(obshistid, aid, ex)
+        imsimFilter = 'imsim_%s_f%s_%s_E00%s.fits.gz' %(obshistid, filter, aid, ex)
+        cmd = 'gzip %s' % imsim
+        subprocess.check_call(cmd, shell=True)
+        imsim += '.gz'
+        target = os.path.join('../..', datadir, imsimFilter)
+        print '-- Moving', imsim, 'to', target
+        shutil.move(imsim, target)
+    os.chdir('../..')
+      
 ##     os.remove('%s' %(trimCatFile))
     os.remove('ancillary/cosmic_rays/%s' %(outputFile))            
     os.remove('ancillary/cosmic_rays/%s.gz' %(outputFile))
 ##     os.remove('chip_%s_%s.pars' %(obshistid, id))
 ##     os.remove('%s' %(cosmicParFile))
 ##     os.remove('%s' %(backgroundParFile))
+##     os.remove('%s' %(lsstCmdFile))
 ##     os.remove('%s' %(raytraceCmdFile))
-##     os.remove('%s' %(raytraceParFile))
+
+    print 'chip.py complete.'
     
     return
 

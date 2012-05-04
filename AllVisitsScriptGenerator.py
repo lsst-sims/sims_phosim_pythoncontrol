@@ -239,7 +239,12 @@ class AllVisitsScriptGenerator:
         # Got rid of raytrace/setup:
         #cmd = 'tar czvf %s ancillary/atmosphere_parameters/* ancillary/atmosphere/cloud ancillary/atmosphere/turb2d ancillary/optics_parameters/optics_parameters ancillary/optics_parameters/control ancillary/trim/trim ancillary/Add_Background/add_background ancillary/Add_Background/filter_constants* ancillary/Add_Background/fits_files ancillary/Add_Background/SEDs/*.txt ancillary/Add_Background/update_filter_constants ancillary/Add_Background/vignetting_*.txt ancillary/cosmic_rays/create_rays ancillary/cosmic_rays/iray_textfiles/iray* ancillary/e2adc/e2adc ancillary/tracking/tracking raytrace/lsst raytrace/*.txt raytrace/version pbs/distributeFiles.py' %(self.execFileTgzName)
         # Moved exec files out of this tar file.
-        cmd = 'tar czf %s ancillary/atmosphere_parameters/*.txt  ancillary/optics_parameters/control  ancillary/Add_Background/filter_constants* ancillary/Add_Background/fits_files ancillary/Add_Background/SEDs/*.txt ancillary/Add_Background/vignetting_*.txt ancillary/cosmic_rays/iray_textfiles/iray* raytrace/*.txt raytrace/version pbs/distributeFiles.py' % os.path.join(self.tmpdir, self.sourceFileTgzName)
+        cmd =  'tar czf %s' % os.path.join(self.tmpdir, self.sourceFileTgzName)
+        cmd += ' lsst/*.txt ancillary/atmosphere_parameters/*.txt'
+        cmd += ' ancillary/Add_Background/filter_constants* ancillary/Add_Background/fits_files'
+        cmd += ' ancillary/Add_Background/SEDs/*.txt ancillary/Add_Background/vignetting_*.txt'
+        cmd += ' ancillary/cosmic_rays/iray_textfiles/iray* raytrace/*.txt'
+        cmd += ' raytrace/version pbs/distributeFiles.py'
         print 'Tarring all source files.'
         subprocess.check_call(cmd, shell=True)
         # cd back to the invocation directory

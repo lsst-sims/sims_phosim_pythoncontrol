@@ -1,5 +1,4 @@
 #!/usr/bin/python
-################!/share/apps/lsst_gcc440/Linux64/external/python/2.5.2/bin/python
 
 """
 !!!!!!!
@@ -59,6 +58,7 @@ if __name__ == "__main__":
     (options, args) = parser.parse_args()
     if len(args) != 3:
         print "Incorrect number of arguments.  Use -h or --help for help."
+        print usage
         quit()
 
     myfile = args[0]

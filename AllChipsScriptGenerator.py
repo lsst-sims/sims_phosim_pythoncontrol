@@ -236,6 +236,9 @@ class AllChipsScriptGenerator:
             if line.startswith('SIM_TELCONFIG'):
                 name, self.telconfig = line.split()
                 print 'Sim_Telconfig: ', self.telconfig
+            #if line.startswith('SIM_CAMCONFIG'):
+            #    name, self.camconfig = line.split()
+            #    print 'Sim_Camconfig: ', self.camconfig
             if line.startswith('SIM_VISTIME'):
                 name, self.vistime = line.split()
                 print 'Sim_Vistime: ', self.vistime
@@ -462,7 +465,7 @@ class AllChipsScriptGenerator:
         print 'Generating the Atmospheric Screens.'
 
         os.chdir('ancillary/atmosphere')
-        screenNumber = [0,1,2,3,4,5]
+        screenNumber = [0,1,2,3,4,5,6]
         for screen in screenNumber:
             for line in open('../../%s' %(self.atmoRaytraceFile)).readlines():
                 if line.startswith('outerscale %s' %(screen)):
@@ -487,7 +490,9 @@ class AllChipsScriptGenerator:
             print cmd
             subprocess.check_call(cmd, shell=True)
 
-            shutil.move('%s_density.fits' %(atmoScreen), '../../')
+            shutil.move('%s_density_coarse.fits' %(atmoScreen), '../../')
+            shutil.move('%s_density_medium.fits' %(atmoScreen), '../../')
+            shutil.move('%s_density_fine.fits' %(atmoScreen), '../../')
             shutil.move('%s_coarsex.fits' %(atmoScreen), '../../')
             shutil.move('%s_coarsey.fits' %(atmoScreen), '../../')
             shutil.move('%s_finex.fits' %(atmoScreen), '../../')
@@ -690,6 +695,7 @@ class AllChipsScriptGenerator:
                         parFile.write('rot_ang %s \n' %(self.prot))
                         parFile.write('buffer 100 \n')
                         parFile.write('straylight 0 \n')
+                        #TODO: parFile.write('flatdir 1 \n')
                         parFile.write('trim \n')
 
                     print 'Running TRIM.'
@@ -716,12 +722,6 @@ class AllChipsScriptGenerator:
                             print 'Finished writing trimcatalog file %s.' %(trimCatFile)
 
                     os.chdir('../..')
-                    try:
-                        #TEMP os.remove(trimParFile)
-                        pass
-                    except:
-                        #print 'WARNING: No file %s to remove!' %(trimParFile)
-                        pass
 
                     sxList = ['0', '1', '2']
                     syList = ['0', '1', '2']
@@ -795,6 +795,7 @@ class AllChipsScriptGenerator:
 
                                     shutil.copyfile('data/focal_plane/sta_misalignments/offsets/pars_%s' %(cid), chipParFile)
                                     with file(chipParFile, 'a') as parFile:
+                                        #TODO: parFile.write('flatdir 1 \n')
                                         parFile.write('chipid %s \n' %(cid))
                                         parFile.write('chipheightfile ../data/focal_plane/sta_misalignments/height_maps/%s.fits.gz \n' %(cid))
 
@@ -855,6 +856,9 @@ class AllChipsScriptGenerator:
             subprocess.check_call(cmd, shell=True)
 
         cmd = 'cat %s %s %s %s %s %s > %s' %(self.obsParFile, self.atmoRaytraceFile, self.opticsParFile, timeParFile, self.cloudRaytraceFile, chipParFile, raytraceParFile)
+        #JPG: Added the 'straylight' line because it's in the v-3.0 condor file:
+        with file(raytraceParFile, 'a') as parFile:
+          parFile.write('straylight 0 \n')
         subprocess.check_call(cmd, shell=True)
 
         return
@@ -939,38 +943,25 @@ class AllChipsScriptGenerator:
         (11) Create and return the E2ADC parameter file.
         """
 
-        axList = ['0', '1']
-        ayList = ['0', '1', '2', '3', '4', '5', '6', '7']
-        for ax in axList:
-            for ay in ayList:
-                nrx = int(rx) * 1440
-                nry = int(ry) * 288
-                nsx = int(sx) * 96
-                nsy = int(sy) * 32
-                nax = int(ax) * 16
-                nay = int(ay) * 2
-                seedamp = int(self.obsid) + nrx + nry + nsx + nsy + nax + nay + int(ex)
-                eid = 'R'+rx+ry+'_S'+sx+sy+'_C'+ax+ay+'_E00'+ex
-                e2adcParFile = 'e2adc_%s_%s.pars' %(self.obshistid, eid)
-
-                try:
-                    os.remove(e2adcParFile)
-                except:
-                    #print 'WARNING: No file %s to remove!' %(e2adcParFile)
-                    pass
-
-                cmd = 'cat data/focal_plane/sta_misalignments/offsets/pars_%s_C%s%s data/focal_plane/sta_misalignments/readout/readoutpars_R%s%s_S%s%s_C%s%s >> %s' %(cid, ax, ay, rx, ry, sx, sy, ax, ay, e2adcParFile)
-                subprocess.check_call(cmd, shell=True)
-
-                with file(e2adcParFile, 'a') as parFile:
-                    parFile.write('inputfilename ../cosmic_rays/output_%s_%s.fits.gz \n' %(self.obshistid, id))
-                    parFile.write('outputfilename imsim_%s_%s \n' %(self.obshistid, eid) )
-                    parFile.write('chipid %s \n' %(cid))
-                    parFile.write('chipoutid R%s%s_S%s%s_C%s%s \n' %(rx, ry, sx, sy, ax, ay))
-                    parFile.write('qemapfilename ../../data/focal_plane/sta_misalignments/qe_maps/QE_R%s%s_S%s%s.fits.gz \n' %(rx, ry, sx, sy))
-                    parFile.write('exptime %s \n'%(self.exptime))
-                    parFile.write('seed %s \n' %(seedamp))
-                    parFile.write('e2adc \n')
+        nrx = int(rx) * 90
+        nry = int(ry) * 18
+        nsx = int(sx) * 6
+        nsy = int(sy) * 2
+        seedchip = int(self.obsid) + nrx + nry + nsx + nsy + int(ex)
+        e2adcParFile = 'e2adc_%s_%s.pars' %(self.obshistid, id)
+        cmd = 'cat data/focal_plane/sta_misalignments/readout/readoutpars_%s >> %s' \
+              %(cid, e2adcParFile)
+        subprocess.check_call(cmd, shell=True)
+        with file(e2adcParFile, 'a') as parFile:
+            parFile.write('inputfilename ../cosmic_rays/output_%s_%s.fits.gz \n' %(self.obshistid, id))
+            parFile.write('outputprefilename imsim_%s_ \n' % self.obshistid )
+            parFile.write('outputpostfilename _E00%s \n' % ex) 
+            parFile.write('chipid %s \n' % cid)
+            parFile.write('qemapfilename ../../data/focal_plane/sta_misalignments/qe_maps/QE_%s.fits.gz \n' % cid)
+            parFile.write('exptime %s \n'%(self.exptime))
+            parFile.write('seed %s \n' %(seedchip))
+            parFile.write('e2adc \n')
+        return
 
     def cleanup(self):
         """
@@ -994,25 +985,32 @@ class AllChipsScriptGenerator:
             os.chdir('%s' %(self.workDir))
             # Files needed for ancillary/atmosphere
             print 'Tarring atmosphere files.'
-            cmd = 'tar cvf nodeFiles%s.tar atmospherescreen_%s_*.fits cloudscreen_%s_*.fits cloudraytrace_%s.pars control_%s.pars objectcatalog_%s.pars' %(self.obshistid, self.obshistid, self.obshistid, self.obshistid, self.obshistid, self.obshistid)
+            cmd =  'tar cvf %s' % nodeFilesTar
+            cmd += ' atmospherescreen_%s_*.fits cloudscreen_%s_*.fits cloudraytrace_%s.pars' %(self.obshistid, self.obshistid, self.obshistid)
+            cmd += ' control_%s.pars objectcatalog_%s.pars' %(self.obshistid, self.obshistid)
             subprocess.check_call(cmd, shell=True)
 
+            # LSST parameter files
+            print 'Tarring lsst files.'
+            cmd =  'tar rvf %s lsst/*.txt' % nodeFilesTar
+            subprocess.check_call(cmd, shell=True)
+            
             # Files for ancillary/Add_Background
-            print 'Tarring ancillary/Add_Background/ files.'
-            shutil.move(nodeFilesTar, 'ancillary/Add_Background')
-            os.chdir('ancillary/Add_Background')
-            shutil.copy('SEDs/darksky_sed.txt', '.')
-            shutil.copy('SEDs/lunar_sed.txt', '.')
-            shutil.copy('SEDs/sed_dome.txt', '.')
-            cmd = 'tar rvf nodeFiles%s.tar filter_constants darksky_sed.txt lunar_sed.txt sed_dome.txt filter_constants_dome' %(self.obshistid)
-            subprocess.check_call(cmd, shell=True)
-            os.remove('darksky_sed.txt')
-            os.remove('lunar_sed.txt')
-            os.remove('sed_dome.txt')
-
+            #print 'Tarring ancillary/Add_Background/ files.'
+            #shutil.move(nodeFilesTar, 'ancillary/Add_Background')
+            #os.chdir('ancillary/Add_Background')
+            #shutil.copy('SEDs/darksky_sed.txt', '.')
+            #shutil.copy('SEDs/lunar_sed.txt', '.')
+            #shutil.copy('SEDs/sed_dome.txt', '.')
+            #cmd = 'tar rvf nodeFiles%s.tar filter_constants darksky_sed.txt lunar_sed.txt sed_dome.txt filter_constants_dome' %(self.obshistid)
+            #subprocess.check_call(cmd, shell=True)
+            #os.remove('darksky_sed.txt')
+            #os.remove('lunar_sed.txt')
+            #os.remove('sed_dome.txt')
+            #shutil.move(nodeFilesTar, '../../')
+            #os.chdir('../../')
+            
             # Executables and binaries files for running on nodes.
-            shutil.move(nodeFilesTar, '../../')
-            os.chdir('../../')
             self._tarExecFiles(nodeFilesTar)
 
             # Zip the tar file.
