@@ -7,6 +7,16 @@ Brief:   This class sets generates all of the scripts needed for the ray-tracing
 Date:    January 26, 2012
 Authors: Nicole Silvestri, U. Washington, nms21@uw.edu,
          Jeff Gardner, U. Washington, Google, gardnerj@phys.washington.edu
+
+Notation: For naming the rafts, sensors, amplifiers, and exposures, we
+          obey the following convention:
+             cid:    Chip/sensor ID string of the form 'R[0-4][0-4]_S[0-2][0-2]'
+             ampid:  Amplifier ID string of the form 'C[0-1][0-7]'
+             expid:  Exposure ID string of the form 'E[0-9][0-9][0-9]'
+             id:     Full Exposure ID string of the form:
+                              'R[0-4][0-4]_S[0-2][0-2]_E[0-9][0-9][0-9]'
+             obshistid: ID of the observation from the trim file with the 'extraID'
+                        digit appended ('clouds'=0, 'noclouds'=1).
 """
 
 from __future__ import with_statement
@@ -25,7 +35,20 @@ from SingleChipScriptGenerator import *
 #import lsst.pex.logging as pexLog
 #import lsst.pex.exceptions as pexExcept
 
-class ParFileNameFactory:
+def readCidList(camstr, fplFile):
+    """Search the focalplanelayout file for lines in fplFile matching
+    the regex in camstr.  Return a list from the matching lines.
+    Each list element is a tuple (cid, devtype, float(devvalue))
+    """
+    cidList = []
+    p = re.compile(camstr)
+    for line in fplFile.readlines():
+        if p.search(line):
+            c = line.split()
+            cidList.append( (c[0],c[6],float(c[7])) )
+    return cidList
+
+class ParFileNames:
     """
     A simple class to try to keep all the filename definitions in one place.
     key:
@@ -33,8 +56,8 @@ class ParFileNameFactory:
       id  = 'R'+rx+ry+'_'+'S'+sx+sy+'_'+'E00'+ex
 
     """
-    def time(self, obshistid, ex):
-        return 'time_%s_E00%s.pars' %(obshistid, ex)
+    def time(self, obshistid, exid):
+        return 'time_%s_%s.pars' %(obshistid, exid)
 
     def chip(self, obshistid, id):
         return 'chip_%s_%s.pars' %(obshistid, id)
@@ -57,12 +80,12 @@ class AllChipsScriptGenerator:
     per chip) in loopOverChips().
 
     This is the class that is least changed from Nicole's original version,
-    mostly because it has so few scheduler dependencies.  Like Nicole's version,
-    you can call the class with rx,ry,sx,sy,ex and it will only run a single
-    chip instead of the full focal plane.
+    mostly because it has so few scheduler dependencies.  Similar to Nicole's version,
+    you can call the class with a full exposure id and it will only run a single
+    exposure instead of the full focal plane.
     """
 
-    def __init__(self, trimfile, policy, extraidFile, rx, ry, sx, sy, ex):
+    def __init__(self, trimfile, policy, extraidFile, idonly=""):
 
         """
 
@@ -73,6 +96,7 @@ class AllChipsScriptGenerator:
 
         """
 
+        self.idonly = idonly
         self.policy = policy
         # Should not ever reference imsimSourcePath on exec node
         #self.imsimHomePath = os.getenv("IMSIM_SOURCE_PATH")
@@ -104,8 +128,25 @@ class AllChipsScriptGenerator:
         #
         # LSST-specific params
         #
-
-        self._readTrimfileAndCalculateParams(rx, ry, sx, sy, ex)
+        # Read in the default catalog first, then replace the non-default
+        # values with the actual trimfile
+        print 'Using instance catalog: default_instcat', 
+        print '***'
+        with open('default_instcat','r') as trimfile:
+            self._readTrimfile(trimfile)
+        print 'Using instance catalog: ', self.trimfile
+        print '***'
+        with open(self.trimfile,'r') as trimfile:
+            self._readTrimfile(trimfile)
+        self._calculateParams()
+        # Build the list of cids to process
+        if idonly:
+            raftid, sid, expid = self.idonly.split("_")
+            self.cidList = ('R%s_S%s' %(raftid, sid),
+                            'CCD', 3.0)
+        else:
+            with open('lsst/focalplanelayout.txt', 'r') as fplfile:
+                self.cidList = readCidList(self.camstr, fplfile)
 
         # Get non-default commands & extra ID
         self.centid = '0'
@@ -159,20 +200,11 @@ class AllChipsScriptGenerator:
         self.catListFile = 'catlist_%s.pars' %(self.obshistid)
         self.trackingParFile = 'tracking_%s.pars' %(self.obshistid)
 
-        return
+        return                
 
-    def _readTrimfileAndCalculateParams(self, rx, ry, sx, sy, ex):
-        self.myrx = rx
-        self.myry = ry
-        self.mysx = sx
-        self.mysy = sy
-        self.myex = ex
-
-        print 'Using instance catalog: ', self.trimfile
-        print '***'
-
+    def _readTrimfile(self, trimfile):
         print 'Initializing Opsim and Instance Catalog Parameters.'
-        for line in open(self.trimfile).readlines():
+        for line in trimfile.readlines():
             if line.startswith('SIM_SEED'):
                 name, self.obsid = line.split()
                 print 'SIM_SEED:', self.obsid
@@ -236,13 +268,18 @@ class AllChipsScriptGenerator:
             if line.startswith('SIM_TELCONFIG'):
                 name, self.telconfig = line.split()
                 print 'Sim_Telconfig: ', self.telconfig
-            #if line.startswith('SIM_CAMCONFIG'):
-            #    name, self.camconfig = line.split()
-            #    print 'Sim_Camconfig: ', self.camconfig
+            if line.startswith('SIM_CAMCONFIG'):
+                self.camconfig = int(line.split()[1])
+                print 'Sim_Camconfig: ', self.camconfig
             if line.startswith('SIM_VISTIME'):
-                name, self.vistime = line.split()
+                self.vistime = float(line.split()[1])
                 print 'Sim_Vistime: ', self.vistime
+            if line.startswith('SIM_NSNAP'):
+                self.nsnap = int(line.split()[1])
+                print 'Sim_Nsnap: ', self.nsnap
+        return
 
+    def _calculateParams(self):
         # Calculated Parameters
         tempDate = datetime.date.today()
         sDate = str(tempDate)
@@ -250,13 +287,14 @@ class AllChipsScriptGenerator:
 
         self.readtime = 3.0
         print 'Readtime:', self.readtime
-        self.exptime = 0.5*(float(self.vistime)) - 0.5*(float(self.readtime))
-        print 'Exptime:', self.exptime
-        self.timeoff = 0.5*(float(self.exptime)) + 0.5*(float(self.readtime))
-        print 'Timeoff:', self.timeoff
-        self.starttime = -0.5*(float(self.vistime))
+        # These are now calculated per chip in loopOverChips()
+        #self.exptime = 0.5*(float(self.vistime)) - 0.5*(float(self.readtime))
+        #print 'Exptime:', self.exptime
+        #self.timeoff = 0.5*(float(self.exptime)) + 0.5*(float(self.readtime))
+        #print 'Timeoff:', self.timeoff
+        self.starttime = -0.5*(self.vistime)
         print 'StartTime:', self.starttime
-        self.endtime = 0.5*(float(self.vistime))
+        self.endtime = 0.5*(self.vistime)
         print 'EndTime:', self.endtime
         self.moonphaserad = 3.14159 - 3.14159*(float(self.moonphase))/100.0
         print 'MoonPhase Radians:', self. moonphaserad
@@ -271,8 +309,25 @@ class AllChipsScriptGenerator:
         self.sunzen = 90 - float(self.sunalt)
         print 'Sun Zenith:', self.sunzen
        	self.minsource = int(self.minsource)
-	self.minsource += 1
         self.ncat = 0
+        if not self.camconfig:
+            raise RuntimeError, "SIM_CAMCONFIG was not supplied."
+        if self.camconfig == 1:
+            self.camstr = 'Group0'
+        elif self.camconfig == 2:
+            self.camstr = 'Group1'
+        elif self.camconfig == 3:
+            self.camstr = 'Group0|Group1'
+        elif self.camconfig == 4:
+            self.camstr = 'Group2'
+        elif self.camconfig == 5:
+            self.camstr = 'Group0|Group2'
+        elif self.camconfig == 6:
+            self.camstr = 'Group1|Group2'
+        elif self.camconfig == 7:
+            self.camstr = 'Group0|Group1|Group2'
+        else:
+            raise RuntimeError, "SIM_CAMCONFIG=%d is not valid." % self.camconfig
         return
 
     def _makePaths(self):
@@ -307,6 +362,7 @@ class AllChipsScriptGenerator:
         self.generateCloudScreen()
         self.generateControlParams()
         self.generateTrackingParams()
+        self.generateTrimCatalog()
         # The SingleChipScriptGenerator class is designed so that only a single instance
         # needs to be called per execution of fullFocalPlane.py.  You can just call the
         # makeScript() method to create a script for each chip.
@@ -420,7 +476,6 @@ class AllChipsScriptGenerator:
             parFile.write('seddir ../data/ \n')
             parFile.write('obshistid %s \n' %(self.obshistid))
             parFile.write('tai %s \n' %(self.tai))
-            parFile.write('exptime %s \n' %(self.exptime))
 
         return
 
@@ -603,7 +658,7 @@ class AllChipsScriptGenerator:
 
     def writeSedManifest(self, trimCatFile, cid):
         """
-        Use the output of the "trim" program, specifically trimcatalog_*.pars, to
+        Use the output of the 'trim' program, specifically trimcatalog_*.pars, to
         figure out which SEDs are needed from the shared catalog for chip 'cid'.
         Generate a manifest of these and write it to sedlist_*.txt.
 
@@ -620,219 +675,181 @@ class AllChipsScriptGenerator:
 
 
 
+    def generateTrimCatalog(self):
+        """
+        Run trim program to create trimcatalog_*.pars files for each chip.
+        """
+        raftid = ""
+        # Progress through the list of cids.  For the first cid of every raft,
+        # create a trim par file.  For the last cid of every raft, run trim.
+        for i,elt in enumerate(self.cidList):
+            cid = elt[0]
+            if raftid != cid.split("_")[0]:
+                raftid = cid.split("_")[0]
+                print 'Submitting raft', raftid
+                trimParFile = 'trim_%s_%s.pars' %(self.obshistid, raftid)
+                if os.path.isfile(trimParFile):
+                    os.remove(trimParFile)
+                with file(trimParFile, 'a') as parFile:
+                    parFile.write('ncatalog %s \n' %(self.ncat))
+                # Add the catalogs to the trim parameter file for the trim program
+                cmd = 'cat %s >> %s' %(self.catListFile, trimParFile)
+                subprocess.check_call(cmd, shell=True)
+                chipcounter = 0
+            print 'Submitting chip:', cid
+            trimCatFile = 'trimcatalog_%s_%s.pars' %(self.obshistid, cid)
+            with file(trimParFile, 'a') as parFile:
+                parFile.write('out_file %s %s \n' %(chipcounter, trimCatFile))
+                parFile.write('chip_id %s %s \n' %(chipcounter, cid))
+            chipcounter += 1
+            # If the next chip is in a different raft (or this is the last chip),
+            # run trim program
+            if i == len(self.cidList) - 1:
+                print 'Last chipid =', cid
+                nextRaftid = ""
+            else:
+                nextRaftid = self.cidList[i+1][0].split("_")[0]
+            if nextRaftid != raftid:
+                # If running a single sensor, ntrims needs to be 1 or it won't run
+                if self.idonly:
+                    ntrims = 1
+                else:
+                    ntrims = chipcounter
+                    #TODO This is an LSST-specific test.  Remove later.
+                    assert chipcounter == 9
+                with file(trimParFile, 'a') as parFile:
+                    parFile.write('ntrim %s \n' %(ntrims))
+                    parFile.write('point_ra %s \n' %(self.pra))
+                    parFile.write('point_dec %s \n' %(self.pdec))
+                    parFile.write('rot_ang %s \n' %(self.prot))
+                    parFile.write('buffer 100 \n')
+                    parFile.write('straylight 0 \n')
+                    #TODO: parFile.write('flatdir 1 \n')
+                    parFile.write('trim \n')
+
+                print 'Running TRIM for cid %s.' %cid
+                os.chdir('ancillary/trim')
+                cmd = './trim < ../../%s' %(trimParFile)
+                subprocess.check_call(cmd, shell=True)
+                print 'Finished Running TRIM.'
+                os.chdir('../..')
+                os.remove(trimParFile)
+                
+        # Now move the trimcatalog files
+        for elt in self.cidList:
+            cid = elt[0]
+            trimCatFile = os.path.join('ancillary/trim',
+                                       'trimcatalog_%s_%s.pars' %(self.obshistid, cid))
+            with file(trimCatFile, 'a') as parFile:
+                parFile.write('lsst \n')
+            shutil.move(trimCatFile, '.')
+            print 'Processed trimcatalog file %s.' %(trimCatFile)
+        return
+    
     def loopOverChips(self, scriptGen, wav):
 
         """
-
-        (7) Trim Program: Create the parameter files for each chip for
-        each stage of the Simulator code then call the python code to
-        create all of the scripts for visit (378 script files will be
-        generated).
+        For every chip in self.cidList, then for every exposure, generate
+        the scripts for the raytrace, background, cosmic ray, and electron-to-ADC.
+        For LSST Group1 CCDs, this is 378 single-chip exposures per focal plane.
 
         """
-        parFactory = ParFileNameFactory()
+        parNames = ParFileNames()
         count = 1
-        rxList = ['0', '1', '2', '3', '4']
-        ryList = ['0', '1', '2', '3', '4']
-        if self.myrx != '':
-            rxList = ['%s' %(self.myrx)]
-            ryList = ['%s' %(self.myry)]
-        for rx in rxList:
-            for ry in ryList:
-                print 'Rx: ', rx
-                print 'Ry: ', ry
-                if rx+ry == '00':
-                    print 'Skipping 00.'
-                elif rx+ry == '04':
-                    print 'Skipping 04.'
-                elif rx+ry == '40':
-                    print 'Skipping 40.'
-                elif rx+ry == '44':
-                    print 'Skipping 44.'
+        cc = 0
+        for chip in self.cidList:
+            cid = chip[0]
+            trimCatFile = 'trimcatalog_%s_%s.pars' %(self.obshistid, cid)
+            # The minimum length of trimCatFile at this stage is 2 lines.
+            # (trim puts 1 line in there, and generateTrimCatalog() appended
+            # a second line. Therefore, the number of sources in the trimCatFile
+            # is its length - 2.
+            with open(trimCatFile) as f:
+                nTrimCatSources = len(f.readlines()) - 2
+            print 'nTrimCatSources:', nTrimCatSources
+            print 'minsource', self.minsource
+            if nTrimCatSources >= self.minsource:
+
+                # If useSharedSEDs is set to 'true', then we are going to read only
+                # the SEDs that we need directly from the shared storage location.
+                # So figure out which SED files are needed for this chip and store
+                # in sedlist_*.txt
+                if self.useSharedSEDs == True:
+                  self.writeSedManifest(trimCatFile, cid)
+
+                devtype = chip[1]
+                devvalue = chip[2]
+                if devtype == 'CCD':
+                    nexp = self.nsnap
+                    exptime = (self.vistime - (nexp-1) * devvalue) / nexp
+                elif devtype == 'CMOS':
+                    nexp = int(self.vistime / devvalue)
+                    exptime = self.vistime / nexp
                 else:
-                    rid = 'R'+rx+ry
-                    print 'Submitting raft', rid
-                    trimParFile = 'trim_%s_%s.pars' %(self.obshistid, rid)
-
-                    try:
-                        os.remove(trimParFile)
-                    except:
-                        #print 'WARNING: No file %s to remove!' %(trimParFile)
-                        pass
-
-                    with file(trimParFile, 'a') as parFile:
-                        parFile.write('ncatalog %s \n' %(self.ncat))
-
-                    # Add the catalogs to the trim parameter file for the trim program
-                    cmd = 'cat %s >> %s' %(self.catListFile, trimParFile)
-                    subprocess.check_call(cmd, shell=True)
-                    chipcounter = 0
-                    sxList = ['0', '1', '2']
-                    syList = ['0', '1', '2']
-                    if self.mysx != '':
-                        sxList = ['%s' %(self.mysx)]
-                        syList = ['%s' %(self.mysy)]
-                    for sx in sxList:
-                        for sy in syList:
-                            cid = 'R'+rx+ry+'_'+'S'+sx+sy
-                            print 'Submitting chip:', cid
-                            trimCatFile = 'trimcatalog_%s_%s.pars' %(self.obshistid, cid)
-                            with file(trimParFile, 'a') as parFile:
-                                parFile.write('out_file %s %s \n' %(chipcounter, trimCatFile))
-                                parFile.write('chip_id %s %s \n' %(chipcounter, cid))
-                            chipcounter += 1
-
-                    # If running a single sensor, ntrims needs to be 1 or it won't run
-                    if self.mysx != '':
-                        ntrims = 1
+                    raise RuntimeError, "Unknown devtype=%s in focalplanelayout file:" %devtype
+                print '# exposures (nexp):', nexp
+                ex = 0
+                while ex < nexp:
+                    expid = 'E%03d' %ex
+                    expTrimCatFile = 'trimcatalog_%s_%s_%s.pars' %(self.obshistid, cid, expid)
+                    shutil.copyfile(trimCatFile, expTrimCatFile)
+                    timeParFile = parNames.time(self.obshistid, expid)
+                    if os.path.isfile(timeParFile):
+                        os.remove(timeParFile)
+                    if devtype == 'CCD':
+                        timeoff = 0.5*exptime + ex*(devvalue + exptime) - 0.5*self.vistime
+                    elif devtype == 'CMOS':
+                        timeoff = 0.5*exptime + ex*exptime - 0.5*self.vistime
                     else:
-                        ntrims = 9
-
-                    with file(trimParFile, 'a') as parFile:
-                        parFile.write('ntrim %s \n' %(ntrims))
-                        parFile.write('point_ra %s \n' %(self.pra))
-                        parFile.write('point_dec %s \n' %(self.pdec))
-                        parFile.write('rot_ang %s \n' %(self.prot))
-                        parFile.write('buffer 100 \n')
-                        parFile.write('straylight 0 \n')
+                        raise RuntimeError, "Unknown devtype=%s in focalplanelayout file:" %devtype
+                    with file(timeParFile, 'a') as parFile:
+                        parFile.write('timeoffset %f \n' %timeoff)
+                        parFile.write('pairid %d \n' %ex)
+                        parFile.write('exptime %f \n' %exptime)
+                    id = '%s_%s' %(cid, expid)
+                    seedchip = int(self.obsid) + cc*1000 + ex
+                    cc += 1
+                    chipParFile = parNames.chip(self.obshistid, id)
+                    if os.path.isfile(chipParFile):
+                        os.remove(chipParFile)
+                    shutil.copyfile('data/focal_plane/sta_misalignments/offsets/pars_%s' %(cid), chipParFile)
+                    with file(chipParFile, 'a') as parFile:
                         #TODO: parFile.write('flatdir 1 \n')
-                        parFile.write('trim \n')
+                        parFile.write('chipid %s \n' %(cid))
+                        parFile.write('chipheightfile ../data/focal_plane/sta_misalignments/height_maps/%s.fits.gz \n' %(cid))
+                    # GENERATE THE RAYTRACE PARS
+                    print 'Generating raytrace pars.'
+                    raytraceParFile = parNames.raytrace(self.obshistid, id)
+                    self.generateRaytraceParams(id, chipParFile, seedchip, timeParFile,
+                                           raytraceParFile)
+                    # GENERATE THE BACKGROUND ADDER PARS
+                    print 'Generating background pars.'
+                    backgroundParFile = parNames.background(self.obshistid, id)
+                    self.generateBackgroundParams(id, seedchip, cid, wav, backgroundParFile)
+                    # GENERATE THE COSMIC RAY ADDER PARS
+                    print 'Generating cosmic rays pars'
+                    cosmicParFile = parNames.cosmic(self.obshistid, id)
+                    self.generateCosmicRayParams(id, seedchip, exptime, cosmicParFile)
+                    # GENERATE THE ELECTRON TO ADC CONVERTER PARS
+                    print 'Generating e2adc pars.'
+                    self.generateE2adcParams(id, cid, expid, seedchip, exptime)
 
-                    print 'Running TRIM.'
-                    os.chdir('ancillary/trim')
-                    cmd = './trim < ../../%s' %(trimParFile)
-                    subprocess.check_call(cmd, shell=True)
-                    print 'Finished Running TRIM.'
-
-                    # Postprocess the trimcatalog*.pars files
-                    sxList = ['0', '1', '2']
-                    syList = ['0', '1', '2']
-                    if self.mysx != '':
-                        sxList = ['%s' %(self.mysx)]
-                        syList = ['%s' %(self.mysy)]
-                    for sx in sxList:
-                        for sy in syList:
-                            cid = 'R'+rx+ry+'_'+'S'+sx+sy
-                            print 'Working on chip:', cid
-                            trimCatFile = 'trimcatalog_%s_%s.pars' %(self.obshistid, cid)
-                            with file(trimCatFile, 'a') as parFile:
-                                parFile.write('lsst \n')
-
-                            shutil.move('%s' %(trimCatFile), '../..')
-                            print 'Finished writing trimcatalog file %s.' %(trimCatFile)
-
-                    os.chdir('../..')
-
-                    sxList = ['0', '1', '2']
-                    syList = ['0', '1', '2']
-                    if self.mysx != '':
-                        sxList = ['%s' %(self.mysx)]
-                        syList = ['%s' %(self.mysy)]
-                    for sx in sxList:
-                        for sy in syList:
-                            cid = 'R'+rx+ry+'_'+'S'+sx+sy
-                            trimCatFile = 'trimcatalog_%s_%s.pars' %(self.obshistid, cid)
-                            numLines = len(open(trimCatFile).readlines())
-                            print 'numlines:', numLines
-                            print 'minsource', self.minsource
-                            # MINSOURCE=0 in trimfile header will produce background-only images.
-                            # if numLines > 0: # creates script for the sensor designated by cid
-                            #TEMP: This should be changed to numLines-2 > self.minsource since
-                            #      the addition of "lsst" at the end means an empty file is 2 lines long.
-                            if numLines > self.minsource:
-
-                                # If useSharedSEDs is set to 'true', then we are going to read only
-                                # the SEDs that we need directly from the shared storage location.
-                                # So figure out which SED files are needed for this chip and store
-                                # in sedlist_*.txt
-                                if self.useSharedSEDs == True:
-                                  self.writeSedManifest(trimCatFile, cid)
-
-                                newTrimCatFile01 = 'trimcatalog_%s_%s_E001.pars' %(self.obshistid, cid)
-                                newTrimCatFile00 = 'trimcatalog_%s_%s_E000.pars' %(self.obshistid, cid)
-                                shutil.copyfile(trimCatFile, newTrimCatFile01)
-                                shutil.copyfile(trimCatFile, newTrimCatFile00)
-
-                                # LOOP OVER EXPOSURES
-                                print 'Looping over Exposures'
-                                exList = ['0', '1']
-                                if self.myex != '':
-                                    exList = ['%s' %(self.myex)]
-                                for ex in exList:
-                                    #timeParFile = 'time_%s_E00%s.pars' %(self.obshistid, ex)
-                                    timeParFile = parFactory.time(self.obshistid, ex)
-                                    try:
-                                        os.remove(timeParFile)
-                                    except:
-                                        #print 'WARNING: No file %s to remove!' %(timeParFile)
-                                        pass
-
-                                    if ex=='0':
-                                        with file(timeParFile, 'a') as parFile:
-                                            parFile.write('timeoffset -%s \n' %(self.timeoff))
-                                    else:
-                                        with file(timeParFile, 'a') as parFile:
-                                            parFile.write('timeoffset %s \n' %(self.timeoff))
-
-                                    with file(timeParFile, 'a') as parFile:
-                                        parFile.write('pairid %s \n' %(ex))
-
-                                    id  = 'R'+rx+ry+'_'+'S'+sx+sy+'_'+'E00'+ex
-
-                                    nrx = int(rx) * 90
-                                    nry = int(ry) * 18
-                                    nsx = int(sx) * 6
-                                    nsy = int(sy) * 2
-                                    seedchip = int(self.obsid) + nrx + nry + nsx + nsy + int(ex)
-
-                                    #chipParFile = 'chip_%s_%s.pars' %(self.obshistid, id)
-                                    chipParFile = parFactory.chip(self.obshistid, id)
-                                    try:
-                                        os.remove(chipParFile)
-                                    except:
-                                        #print 'WARNING: No file %s to remove!' %(chipParFile)
-                                        pass
-
-                                    shutil.copyfile('data/focal_plane/sta_misalignments/offsets/pars_%s' %(cid), chipParFile)
-                                    with file(chipParFile, 'a') as parFile:
-                                        #TODO: parFile.write('flatdir 1 \n')
-                                        parFile.write('chipid %s \n' %(cid))
-                                        parFile.write('chipheightfile ../data/focal_plane/sta_misalignments/height_maps/%s.fits.gz \n' %(cid))
-
-                                    raytraceParFile   = parFactory.raytrace(self.obshistid, id)
-                                    backgroundParFile = parFactory.background(self.obshistid, id)
-                                    cosmicParFile     = parFactory.cosmic(self.obshistid, id)
-                                    # GENERATE THE RAYTRACE PARS
-                                    print 'Running the raytrace.'
-                                    self.generateRaytraceParams(id, chipParFile, seedchip, timeParFile,
-                                                           raytraceParFile)
-                                    # GENERATE THE BACKGROUND ADDER PARS
-                                    print 'Running the background.'
-                                    self.generateBackgroundParams(id, seedchip, cid, wav, backgroundParFile)
-                                    # GENERATE THE COSMIC RAY ADDER PARS
-                                    print 'Running cosmic rays.'
-                                    self.generateCosmicRayParams(id, seedchip, cosmicParFile)
-                                    # GENERATE THE ELECTRON TO ADC CONVERTER PARS
-                                    print 'Running e2adc.'
-                                    self.generateE2adcParams(id, cid, ex, rx, ry, sx, sy)
-                                    #jId = self.obshistid + ex + str(count)
-                                    #jobId = int(jId)
-
-                                    sensorId  = rx+ry+'_'+sx+sy+'_'+ex
-                                    if self.myrx !='':
-                                        try:
-                                            os.mkdir(self.scratchOutputDir)
-                                        except:
-                                            print 'WARNING: Directory %s already exists!' %(self.scratchOutputDir)
-                                            pass
-                                        chip.makeChipImage(self.obshistid, self.filt, rx, ry, sx, sy, ex, self.scratchOutputPath)
-                                    else:
-                                        # MAKE THE SINGLE-CHIP SCRIPTS
-                                        print 'Making Single-Chip Scripts.'
-                                        scriptGen.makeScript(cid, id, rx, ry, sx, sy, ex, raytraceParFile,
-                                                             backgroundParFile, cosmicParFile, sensorId, self.logPath)
-                                    print 'Count:', count
-                                    count += 1
+                    if self.idonly:
+                        try:
+                            os.mkdir(self.scratchOutputDir)
+                        except:
+                            print 'WARNING: Directory %s already exists!' %(self.scratchOutputDir)
+                            pass
+                        chip.makeChipImage(self.obshistid, self.filt, cid, expid, self.scratchOutputPath)
+                    else:
+                        # MAKE THE SINGLE-CHIP SCRIPTS
+                        print 'Making Single-Chip Scripts.'
+                        scriptGen.makeScript(cid, expid, raytraceParFile, backgroundParFile,
+                                             cosmicParFile, expTrimCatFile, self.logPath)
+                    print 'Count:', count
+                    count += 1
+                    ex += 1
+                os.remove(trimCatFile)
         return
 
 
@@ -913,7 +930,7 @@ class AllChipsScriptGenerator:
 
         return
 
-    def generateCosmicRayParams(self, id, seedchip, cosmicParFile):
+    def generateCosmicRayParams(self, id, seedchip, exptime, cosmicParFile):
 
         """
         (10) Create and return the COSMIC_RAY parameter file.
@@ -929,7 +946,7 @@ class AllChipsScriptGenerator:
             parFile.write('inputfilename ../Add_Background/fits_files/imsim_%s_%s.fits \n' %(self.obshistid, id))
             parFile.write('outputfilename output_%s_%s.fits \n' %(self.obshistid, id))
             parFile.write('pixsize 10.0 \n')
-            parFile.write('exposuretime %s \n' %(self.exptime))
+            parFile.write('exposuretime %s \n' %(exptime))
             parFile.write('raydensity 0.6 \n')
             parFile.write('scalenumber 8.0 \n')
             parFile.write('seed %s \n' %(seedchip))
@@ -937,17 +954,12 @@ class AllChipsScriptGenerator:
 
         return
 
-    def generateE2adcParams(self, id, cid, ex, rx, ry, sx, sy):
+    def generateE2adcParams(self, id, cid, expid, seedchip, exptime):
 
         """
         (11) Create and return the E2ADC parameter file.
         """
 
-        nrx = int(rx) * 90
-        nry = int(ry) * 18
-        nsx = int(sx) * 6
-        nsy = int(sy) * 2
-        seedchip = int(self.obsid) + nrx + nry + nsx + nsy + int(ex)
         e2adcParFile = 'e2adc_%s_%s.pars' %(self.obshistid, id)
         cmd = 'cat data/focal_plane/sta_misalignments/readout/readoutpars_%s >> %s' \
               %(cid, e2adcParFile)
@@ -955,10 +967,10 @@ class AllChipsScriptGenerator:
         with file(e2adcParFile, 'a') as parFile:
             parFile.write('inputfilename ../cosmic_rays/output_%s_%s.fits.gz \n' %(self.obshistid, id))
             parFile.write('outputprefilename imsim_%s_ \n' % self.obshistid )
-            parFile.write('outputpostfilename _E00%s \n' % ex) 
+            parFile.write('outputpostfilename _%s \n' % expid) 
             parFile.write('chipid %s \n' % cid)
             parFile.write('qemapfilename ../../data/focal_plane/sta_misalignments/qe_maps/QE_%s.fits.gz \n' % cid)
-            parFile.write('exptime %s \n'%(self.exptime))
+            parFile.write('exptime %s \n'%(exptime))
             parFile.write('seed %s \n' %(seedchip))
             parFile.write('e2adc \n')
         return
@@ -973,7 +985,7 @@ class AllChipsScriptGenerator:
 
         """
 
-        if self.myrx == '':
+        if not self.idonly:
             # Create tar file to be copied to local nodes.  This prevents
             # IO issues with copying lots of little files from the head
             # node to the local nodes.  Only create the tar file if not
@@ -991,7 +1003,7 @@ class AllChipsScriptGenerator:
             subprocess.check_call(cmd, shell=True)
 
             # LSST parameter files
-            print 'Tarring lsst files.'
+            print 'Tarring lsst.'
             cmd =  'tar rvf %s lsst/*.txt' % nodeFilesTar
             subprocess.check_call(cmd, shell=True)
             
@@ -1027,7 +1039,7 @@ class AllChipsScriptGenerator:
         self._cleanupSedFiles()
 
         # Move the script files if created (i.e. not in single-chip mode)
-        if self.myrx == '':
+        if not self.idonly:
             self._cleanupScriptFiles()
         return
 

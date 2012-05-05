@@ -1,5 +1,4 @@
 #!/usr/bin/python
-###########!/share/apps/lsst_gcc440/Linux64/external/python/2.5.2/bin/python
 
 """
 Brief:   Python script to create the 378 shell scripts necessary to execute
@@ -7,8 +6,8 @@ Brief:   Python script to create the 378 shell scripts necessary to execute
          (189 chips + 2 exposures per chip)
          In general, this is called by the script that was made by
          SingleVisitScriptGenerator.  All of the work is done by the
-         AllChipsScriptGenerator class.  Like Nicole's original version,
-         it can also be called with rx,ry,sx,sy,ex arguments and will just
+         AllChipsScriptGenerator class.  Similar to Nicole's original version,
+         it can also be called with a single-chip exposure argument and will just
          work on a single chip and not generate any script.
 
          Note that which scheduler to use is determined by the 'scheduler2'
@@ -26,23 +25,14 @@ Options: trimfile:    absolute path and name of the trimfile
          extraidFile: name of the file containing extra parameters
                       to change simulator defaults (eg. turn clouds off)
 
-         If running in single chip mode, you will also need the following options:
-         rx: Raft x value
-         ry: Raft y value
-         sx: Sensor x value
-         sy: Sensor y value
-         ex: Snap x value
+         To run in single chip mode, supply the full exposure ID ('Rxx_Sxx_Exxx')
+         as the optional 4th argument.  R=Raft, S=Sensor, E=Exposure
 
 """
 import ConfigParser
 from AllChipsScriptGenerator import *
-#import lsst.pex.policy as pexPolicy
-#import lsst.pex.logging as pexLog
-#import lsst.pex.exceptions as pexExcept
 
-
-
-def main(trimfile, imsimConfigFile, extraidFile, rx, ry, sx, sy, ex):
+def main(trimfile, imsimConfigFile, extraidFile, id):
 
     """
     Run the fullFocalplanePbs.py script, populating it with the
@@ -58,10 +48,10 @@ def main(trimfile, imsimConfigFile, extraidFile, rx, ry, sx, sy, ex):
     # Determine the pre-processing scheduler so that we know which class to use
     scheduler = policy.get('general','scheduler2')
     if scheduler == 'csh':
-        scriptGenerator = AllChipsScriptGenerator(trimfile, policy, extraidFile, rx, ry, sx, sy, ex)
+        scriptGenerator = AllChipsScriptGenerator(trimfile, policy, extraidFile, id)
         scriptGenerator.makeScripts()
     elif scheduler == 'pbs':
-        scriptGenerator = AllChipsScriptGenerator_Pbs(trimfile, policy, extraidFile, rx, ry, sx, sy, ex)
+        scriptGenerator = AllChipsScriptGenerator_Pbs(trimfile, policy, extraidFile, id)
         scriptGenerator.makeScripts()
     elif scheduler == 'exacycle':
         print "Exacycle funtionality not added yet."
@@ -73,17 +63,15 @@ def main(trimfile, imsimConfigFile, extraidFile, rx, ry, sx, sy, ex):
 
 if __name__ == "__main__":
 
-    if not len(sys.argv) == 9:
-        print "usage: python fullFocalplane.py trimfile imsimConfigFile extraidFile rx ry sx sy ex"
+    if len(sys.argv) < 4 or len(sys.argv) > 5:
+        print "usage: python fullFocalplane.py trimfile imsimConfigFile extraidFile [Rxx_Sxx_Exxx]"
         quit()
 
     trimfile = sys.argv[1]
     imsimConfigFile = sys.argv[2]
     extraidFile = sys.argv[3]
-    rx = sys.argv[4]
-    ry = sys.argv[5]
-    sx = sys.argv[6]
-    sy = sys.argv[7]
-    ex = sys.argv[8]
+    id = ""
+    if len(sys.argv) == 5:
+      id = sys.argv[4]
 
-    main(trimfile, imsimConfigFile, extraidFile, rx, ry, sx, sy, ex)
+    main(trimfile, imsimConfigFile, extraidFile, id)

@@ -239,7 +239,7 @@ class SingleVisitScriptGenerator(AbstractScriptGenerator):
                 cshOut.write('cd %s \n' %(visitPath))
                 cshOut.write('echo Running fullFocalplane.py with %s. \n' %(self.extraIdFile))
                 cshOut.write('which %s\n' %(self.pythonExec))
-                cshOut.write("%s fullFocalplane.py %s %s %s '' '' '' '' ''\n"
+                cshOut.write("%s fullFocalplane.py %s %s %s\n"
                              %(self.pythonExec, trimfileBasename, self.imsimConfigFile, self.extraIdFile))
                 cshOut.write('cp %s_f%sJobs.lis %s \n'%(obshistid, filt, self.stagePath2))
 

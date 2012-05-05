@@ -33,9 +33,14 @@ Notes:   On Cluster, must have LSST stack with afw setup.  Can also
          atmospherescreen_%s_%s_*.fits %(obshistid, screen)
          e2adc_%s_%s.pars %(obshistid, screen)
 
-To Do:   Add pex_logging and pex_exceptions
-         Remove all directory dependence - use environment variables
-
+Notation: For naming the rafts, sensors, amplifiers, and exposures, we
+          obey the following convention:
+             cid:    Chip/sensor ID string of the form 'R[0-4][0-4]_S[0-2][0-2]'
+             ampid:  Amplifier ID string of the form 'cid_C[0-1][0-7]'
+             expid:  Exposure ID string of the form 'E[0-9][0-9][0-9]'
+             id:     Full Exposure ID string of the form 'cid_expid'
+             obshistid: ID of the observation from the trim file with the 'extraID'
+                        digit appended ('clouds'=0, 'noclouds'=1).
 """
 from __future__ import with_statement
 import os, re, sys
@@ -45,10 +50,6 @@ import subprocess
 import string
 import gzip
 
-#import lsst.pex.policy as pexPolicy
-#import lsst.pex.logging as pexLog
-#import lsst.pex.exceptions as pexExcept
-
 def readAmpList(filename, cid):
     ampList = []
     with open(filename, 'r') as ampFile:
@@ -57,14 +58,13 @@ def readAmpList(filename, cid):
                 ampList.append(line.split()[0])
     return ampList
 
-def makeChipImage(obshistid, filter, rx, ry, sx, sy, ex, datadir):
+def makeChipImage(obshistid, filter, cid, expid, datadir):
 
     """
     Create the chip image.
     """
 
-    id  = 'R'+rx+ry+'_S'+sx+sy+'_E00'+ex
-    cid = 'R'+rx+ry+'_S'+sx+sy
+    id = '%s_%s' %(cid, expid)
     
     lsstCmdFile       = 'lsst_%s_%s.pars' %(obshistid, id)
     trimCatFile       = 'trimcatalog_%s_%s.pars' %(obshistid, id)
@@ -130,9 +130,9 @@ def makeChipImage(obshistid, filter, rx, ry, sx, sy, ex, datadir):
     subprocess.check_call(cmd, shell=True)
 
     print 'From %s:' %os.getcwd()
-    for aid in ampList:
-        imsim = 'imsim_%s_%s_E00%s.fits' %(obshistid, aid, ex)
-        imsimFilter = 'imsim_%s_f%s_%s_E00%s.fits.gz' %(obshistid, filter, aid, ex)
+    for ampid in ampList:
+        imsim = 'imsim_%s_%s_%s.fits' %(obshistid, ampid, expid)
+        imsimFilter = 'imsim_%s_f%s_%s_%s.fits.gz' %(obshistid, filter, ampid, expid)
         cmd = 'gzip %s' % imsim
         subprocess.check_call(cmd, shell=True)
         imsim += '.gz'
@@ -156,17 +156,15 @@ def makeChipImage(obshistid, filter, rx, ry, sx, sy, ex, datadir):
 
 if __name__ == "__main__":
     
-    if not len(sys.argv) == 9:
-        print "usage: python chip.py obshistid filterNo rx ry sx sy ex datadir"
+    if not len(sys.argv) == 6:
+        print "usage: python chip.py obshistid filterNo cid expid datadir"
         quit()
 
     obshistid = sys.argv[1]
     filter = sys.argv[2]
-    rx = sys.argv[3]
-    ry = sys.argv[4]
-    sx = sys.argv[5]
-    sy = sys.argv[6]
-    ex = sys.argv[7]
-    datadir = sys.argv[8] 
+    cid = sys.argv[3]
+    expid = sys.argv[4]
+    datadir = sys.argv[5]
 
-    makeChipImage(obshistid, filter, rx, ry, sx, sy, ex, datadir)
+
+    makeChipImage(obshistid, filter, cid, expid, datadir)

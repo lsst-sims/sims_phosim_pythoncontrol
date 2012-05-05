@@ -6,7 +6,7 @@ Brief:   Main classes for generating the the shell scripts for all of
          See classes for more info.
 
 Authors: Nicole Silvestri, U. Washington, nms@astro.washington.edu
-         Jeffrey P. Gardner, U. Washington, Google, gardnerj@phys.washington.edu
+         Jeffrey P. Gardner, U. Washington, gardnerj@phys.washington.edu
 
 """
 
@@ -244,7 +244,7 @@ class AllVisitsScriptGenerator:
         cmd += ' ancillary/Add_Background/filter_constants* ancillary/Add_Background/fits_files'
         cmd += ' ancillary/Add_Background/SEDs/*.txt ancillary/Add_Background/vignetting_*.txt'
         cmd += ' ancillary/cosmic_rays/iray_textfiles/iray* raytrace/*.txt'
-        cmd += ' raytrace/version pbs/distributeFiles.py'
+        cmd += ' raytrace/version pbs/distributeFiles.py *_instcat'
         print 'Tarring all source files.'
         subprocess.check_call(cmd, shell=True)
         # cd back to the invocation directory
