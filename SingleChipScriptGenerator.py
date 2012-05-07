@@ -79,10 +79,10 @@ class SingleChipScriptGenerator(AbstractScriptGenerator):
         if self.useSharedData == True:
           self.scratchSharedPath = os.path.join(self.imsimDataPath,'sharedData')
         else:
-          self.scratchSharedPath = self.policy.get('general','scratchDataPath')
+          self.scratchSharedPath = self.policy.get('general','scratchDataPathSEDs')
         # writeCopySharedData() will check the existence of self.dataCheckDir
         # to determine if it needs to grab and untar self.tarball.
-        self.dataCheckDir = 'data/focal_plane/sta_misalignments/qe_maps'
+        self.dataCheckDir = 'data/starSED/gizis_SED'
         # Directories and filenames
         self.savePath  = self.policy.get('general','savePath')
         self.scratchPath = self.policy.get('general','scratchExecPath')
@@ -136,7 +136,7 @@ class SingleChipScriptGenerator(AbstractScriptGenerator):
         To prevent conflicts between parallel workunits, the files needed for
         each work unit are packaged in scratchPath/wuID where 'wuID' is the
         work unit ID and is constructed as:
-               wuID = '%s-f%s-%s' %(self.obshistid, id, self.filter)
+               wuID = '%s-f%s-%s' %(self.obshistid, self.filter, id)
         where 'id' is of the form:
                id = 'R'+rx+ry+'_'+'S'+sx+sy+'_'+'E00'+ex
 
@@ -385,9 +385,6 @@ class SingleChipScriptGenerator_Pbs(SingleChipScriptGenerator):
                                            paramDir, trackingParFile)
 
         self.username = self.policy.get('pbs','username')
-        # Path to the PBS-specific JOB DIRECTORIES running on the local nodes.
-        # (These are redefined for PBS)
-        #self.scratchPath = os.path.join(self.policy.get('general','scratchPath'), self.username)
         print 'Your exec-node scratch Path is: ', self.scratchPath
         return
 

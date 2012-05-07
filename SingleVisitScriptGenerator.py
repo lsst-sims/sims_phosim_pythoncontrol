@@ -67,7 +67,10 @@ class SingleVisitScriptGenerator(AbstractScriptGenerator):
         if self.useSharedData == True:
           self.scratchSharedPath = os.path.join(self.imsimDataPath,'sharedData')
         else:
-          self.scratchSharedPath = self.policy.get('general','scratchDataPath')
+          self.scratchSharedPath = self.policy.get('general','scratchDataPathPRE')
+        # writeCopySharedData() will check the existence of self.dataCheckDir
+        # to determine if it needs to grab and untar self.tarball.
+        self.dataCheckDir = 'data/focal_plane/sta_misalignments/qe_maps'
         # Directories and filenames
         self.scratchPath = self.policy.get('general','scratchExecPath')
         self.savePath  = self.policy.get('general','savePath')
@@ -329,7 +332,6 @@ class SingleVisitScriptGenerator_Pbs(SingleVisitScriptGenerator):
                                              imsimConfigFile, extraIdFile, sourceFileTgzName,
                                             execFileTgzName, controlFileTgzName)
         self.username = self.policy.get('pbs','username')
-        #self.scratchPath = os.path.join(self.policy.get('general','scratchPath'), username)
         return
 
     def jobFileName(self, obshistid, filt):
