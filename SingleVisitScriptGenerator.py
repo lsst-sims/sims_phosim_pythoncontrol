@@ -32,8 +32,9 @@ class SingleVisitScriptGenerator(AbstractScriptGenerator):
     something in the .cfg file changes.  Each call to makeScript() sets all the
     variables change per visit.
     """
-    def __init__(self, scriptInvocationPath, scriptOutList, policy, imsimConfigFile, extraIdFile,
-                 sourceFileTgzName, execFileTgzName, controlFileTgzName, tmpdir):
+    def __init__(self, scriptInvocationPath, scriptOutList, policy, imsimConfigFile,
+                 extraIdFile, sourceFileTgzName, execFileTgzName, controlFileTgzName,
+                 tmpdir):
 
         self._loadEnvironmentVars()
         self.imsimConfigFile = imsimConfigFile
@@ -70,7 +71,7 @@ class SingleVisitScriptGenerator(AbstractScriptGenerator):
           self.scratchSharedPath = self.policy.get('general','scratchDataPathPRE')
         # writeCopySharedData() will check the existence of self.dataCheckDir
         # to determine if it needs to grab and untar self.tarball.
-        self.dataCheckDir = 'data/focal_plane/sta_misalignments/qe_maps'
+        self.dataCheckDir = 'sharedData/focal_plane/sta_misalignments/qe_maps'
         # Directories and filenames
         self.scratchPath = self.policy.get('general','scratchExecPath')
         self.savePath  = self.policy.get('general','savePath')
@@ -210,7 +211,7 @@ class SingleVisitScriptGenerator(AbstractScriptGenerator):
                 # Set soft link to the catalog directory
                 #
                 cshOut.write('echo Setting soft link to data directory. \n')
-                cshOut.write('ln -s %s data \n' %self.scratchSharedPath)
+                cshOut.write('ln -s %s data \n' %os.path.join(self.scratchSharedPath, 'sharedData'))
                 # scratchOutputPath gets made in fullFocalPlane
                 #cshOut.write('mkdir %s \n' %(self.scratchOutputPath))
 
@@ -324,14 +325,19 @@ class SingleVisitScriptGenerator(AbstractScriptGenerator):
 class SingleVisitScriptGenerator_Pbs(SingleVisitScriptGenerator):
 
     def __init__(self, scriptInvocationPath, scriptOutList, policy, imsimConfigFile,
-                 extraIdFile, sourceFileTgzName, execFileTgzName, controlFileTgzName):
+                 extraIdFile, sourceFileTgzName, execFileTgzName, controlFileTgzName,
+                 tmpdir):
         """
         Augment the superclass's constructor to have the PBS 'username' appended to it.
         """
         SingleVisitScriptGenerator.__init__(self, scriptInvocationPath, scriptOutList, policy,
                                              imsimConfigFile, extraIdFile, sourceFileTgzName,
-                                            execFileTgzName, controlFileTgzName)
-        self.username = self.policy.get('pbs','username')
+                                            execFileTgzName, controlFileTgzName, tmpdir)
+        self.username =   self.policy.get('pbs','username')
+        self.processors = self.policy.get('general', 'processors')
+        self.numNodes =   self.policy.get('general', 'numNodes')
+        self.pmem =       self.policy.get('general', 'pmem')
+        self.jobname =    self.policy.get('general', 'jobname')
         return
 
     def jobFileName(self, obshistid, filt):

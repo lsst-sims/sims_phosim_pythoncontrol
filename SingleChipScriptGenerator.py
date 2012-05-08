@@ -82,7 +82,7 @@ class SingleChipScriptGenerator(AbstractScriptGenerator):
           self.scratchSharedPath = self.policy.get('general','scratchDataPathSEDs')
         # writeCopySharedData() will check the existence of self.dataCheckDir
         # to determine if it needs to grab and untar self.tarball.
-        self.dataCheckDir = 'data/starSED/gizis_SED'
+        self.dataCheckDir = 'sharedData/starSED/gizis_SED'
         # Directories and filenames
         self.savePath  = self.policy.get('general','savePath')
         self.scratchPath = self.policy.get('general','scratchExecPath')
@@ -225,7 +225,7 @@ class SingleChipScriptGenerator(AbstractScriptGenerator):
                 # Set the soft link to the catalog directory
                 #
                 jobFile.write('echo Setting soft link to data directory. \n')
-                jobFile.write('ln -s %s/ data \n' %self.scratchSharedPath)
+                jobFile.write('ln -s %s data \n' %os.path.join(self.scratchSharedPath, 'sharedData'))
                 #
                 # Create the scratch output directory
                 #
@@ -347,14 +347,14 @@ class SingleChipScriptGenerator(AbstractScriptGenerator):
         try:
             jobOut = open(jobFileName, 'a')
         except IOError:
-            print "Could not open %s for writing cleanup commands for PBS script" %(jobFileName)
+            print "Could not open %s for writing cleanup commands for script" %(jobFileName)
             sys.exit()
         print >>jobOut, "### ---------------------------------------"
         print >>jobOut, "### DELETE the local node directories and all files."
         print >>jobOut, "### Does not delete parent directories if created"
         print >>jobOut, "### ---------------------------------------"
-        print >>jobOut, "#echo Now deleting files in %s/%s" %(self.scratchPath, wuID)
-        print >>jobOut, "#/bin/rm -rf %s/%s" %(self.scratchPath, wuID)
+        print >>jobOut, "echo Now deleting files in %s/%s" %(self.scratchPath, wuID)
+        print >>jobOut, "/bin/rm -rf %s/%s" %(self.scratchPath, wuID)
         print >>jobOut, "echo ---"
         if self.useDb == True:
             self.dbCleanup(jobOut, self.obshistid, '%s_%s' %(cid, expid))
@@ -389,7 +389,7 @@ class SingleChipScriptGenerator_Pbs(SingleChipScriptGenerator):
         return
 
 
-    def jobFileName(self, id):
+    def getJobFileName(self, id):
         return 'exec_%s_%s.pbs' %(self.obshistid, id)
 
     """
@@ -463,14 +463,10 @@ class SingleChipScriptGenerator_Pbs(SingleChipScriptGenerator):
         else:
             queue = '-q %s' %(queueTmp)
 
-        tempHist, rNum, sNum, eNumber = wuID.split('_')
-        #obshistid = re.sub('%s/' %(username),'', tempHist)
-        obshistid = self.obshistid
-        eNum, filNum = eNumber.split('f')
-        filename = obshistid + '_' + rNum + '_' + sNum + '_' + eNum
+        pbslogfilename = '%s.out' % wuID
 
         sDate = str(datetime.datetime.now())
-        paramdir = '%s-f%s' %(obshistid, self.filter)
+        paramdir = '%s-f%s' %(self.obshistid, self.filter)
         visitPath = os.path.join(self.savePath, paramdir)
 
         if os.path.isfile(pbsfilename):
@@ -504,7 +500,7 @@ class SingleChipScriptGenerator_Pbs(SingleChipScriptGenerator):
         print >>pbsout, "#PBS -V"
         # Combine stdout and stderr in one stdout file
         print >>pbsout, "#PBS -j oe"
-        print >>pbsout, "#PBS -o %s/%s.out" %(visitLogPath, filename)
+        print >>pbsout, "#PBS -o %s" % os.path.join(visitLogPath, pbslogfilename)
         print >>pbsout, "#PBS -l walltime=%s" %(walltime)
         print >>pbsout, "#PBS -l nodes=%s:ppn=%s" %(nodes, processors)
         print >>pbsout, "#PBS -l pmem=%sMB" %(pmem)
@@ -582,9 +578,6 @@ class SingleChipScriptGenerator_Pbs(SingleChipScriptGenerator):
         wuPath = os.path.join(self.scratchPath, wuID)
         imsimSourcePath = os.getenv("IMSIM_SOURCE_PATH")
 
-        tempHist, rNum, sNum, eNumber = wuID.split('_')
-        obshistid = re.sub('%s/' %(self.username),'', tempHist)
-
         try:
             pbsout = open(pbsfilename, 'a')
         except IOError:
@@ -599,7 +592,7 @@ class SingleChipScriptGenerator_Pbs(SingleChipScriptGenerator):
         print >>pbsout, " "
         print >>pbsout, "set local_scratch_dir = %s" %(wuPath)
         print >>pbsout, "set job_submission_dir = $PBS_O_WORKDIR"
-        print >>pbsout, "set obshistid = %s" %(obshistid)
+        print >>pbsout, "set obshistid = %s" %(self.obshistid)
         if self.useDb == True:
             catGenPath = self.policy.get('lsst','catGen')
             print >>pbsout, "set cat_gen = %s" %(catGenPath)

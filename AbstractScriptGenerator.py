@@ -125,7 +125,7 @@ class AbstractScriptGenerator:
                 if self.useSharedData == False:
                   # Make sure your shared directory on the compute node exists
                   cshOut.write('if ( ! -d %s ) then \n' %(self.scratchSharedPath))
-                  cshOut.write('  mkdir %s \n' %(self.scratchSharedPath))
+                  cshOut.write('  mkdir -p %s \n' %(self.scratchSharedPath))
                   cshOut.write('endif \n')
                   cshOut.write('cd %s \n' %(self.scratchSharedPath))
                 # Make sure the data directory and all files are present on the exec node.

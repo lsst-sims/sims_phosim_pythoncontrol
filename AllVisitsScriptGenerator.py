@@ -363,16 +363,22 @@ class AllVisitsScriptGenerator_Pbs(AllVisitsScriptGenerator):
 
         # Note that tarExecFiles() needs to be called before initializing
         # SingleVisitScriptGenerator because it defines self.execFileTgzName
+        # Same with tarSourceFiles() and tarControlFiles().
+        self.tarSourceFiles()
         self.tarExecFiles()
+        self.tarControlFiles()
         # SingleVisitScriptGenerator can be instantiated only once per execution environment,
         # So initialize it here, then call the makeScript() in the loop over trim files.
-        scriptGen = SingleVisitScriptGenerator_Pbs(self.scriptInvocationPath, scriptOutList, self.policy,
-                                               self.imsimConfigFile, self.extraIdFile,
-                                               self.execFileTgzName)
+        scriptGen = SingleVisitScriptGenerator_Pbs(self.scriptInvocationPath, scriptOutList,
+                                                   self.policy, self.imsimConfigFile,
+                                                   self.extraIdFile, self.sourceFileTgzName,
+                                                   self.execFileTgzName, self.controlFileTgzName,
+                                                   self.tmpdir)
 
+        visitDirList = []
         for trimfileName in self.trimfileList:
             trimfileName = trimfileName.strip()
-            self.processTrimFile(scriptGen, trimfileName)
+            visitDirList.append(self.processTrimFile(scriptGen, trimfileName))
         return
 
 

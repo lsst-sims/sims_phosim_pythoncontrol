@@ -1083,6 +1083,7 @@ class AllChipsScriptGenerator:
 
     def _cleanupScriptFiles(self):
         # Deal with the script and command files if created (not single chip mode).
+        print 'Moving shell script files to', self.paramDir
         for pbs in glob.glob('exec_%s_*.csh' %(self.obshistid)):
             shutil.copy(pbs, '%s' %(self.paramDir))
             os.remove(pbs)
@@ -1094,9 +1095,12 @@ class AllChipsScriptGenerator:
             print 'WARNING: No command files to remove!'
             pass
 
+        scriptListFilename = '%s_f%sJobs.lis' %(self.obshistid, self.filter)
+        if os.path.isfile(scriptListFilename):
+            os.remove(scriptListFilename)
 
         try:
-            cmd = 'ls %s/*.csh > %s_f%sJobs.lis' %(self.paramDir, self.obshistid, self.filter)
+            cmd = 'ls %s/*.csh > %s' %(self.paramDir, scriptListFilename)
             subprocess.check_call(cmd,shell=True)
             print 'Created qsub list.'
             print 'Finished tarring and moving files.  Ready to launch per-chip scripts.'
@@ -1109,8 +1113,8 @@ class AllChipsScriptGenerator:
 
 class AllChipsScriptGenerator_Pbs(AllChipsScriptGenerator):
 
-    def __init__(self, trimfile, policy, extraidFile, rx, ry, sx, sy, ex):
-        AllChipsScriptGenerator.__init__(self, trimfile, policy, extraidFile, rx, ry, sx, sy, ex)
+    def __init__(self, trimfile, policy, extraidFile, idonly=""):
+        AllChipsScriptGenerator.__init__(self, trimfile, policy, extraidFile, idonly)
         self.username = self.policy.get('pbs','username')
         print 'Your PBS username is: ', self.username
         return
@@ -1120,12 +1124,14 @@ class AllChipsScriptGenerator_Pbs(AllChipsScriptGenerator):
         This is the main worker routine.  It just goes through and calls
         all of Nicole's original functions.
         """
+        self._makePaths()
         self.writeObsCatParams()
         self.generateAtmosphericParams()
         wav = self.generateAtmosphericScreen()
         self.generateCloudScreen()
         self.generateControlParams()
         self.generateTrackingParams()
+        self.generateTrimCatalog()
         # The SingleChipScriptGenerator class is designed so that only a single instance
         # needs to be called per execution of fullFocalPlane.py.  You can just call the
         # makeScript() method to create a script for each chip.
@@ -1138,6 +1144,7 @@ class AllChipsScriptGenerator_Pbs(AllChipsScriptGenerator):
 
     def _cleanupScriptFiles(self):
         # Deal with the pbs and command files if created (not single chip mode).
+        print 'Moving PBS script files to', self.paramDir
         for pbs in glob.glob('exec_%s_*.pbs' %(self.obshistid)):
             shutil.move(pbs, '%s' %(self.paramDir))
 
@@ -1150,11 +1157,12 @@ class AllChipsScriptGenerator_Pbs(AllChipsScriptGenerator):
             pass
 
         scriptListFilename = '%s_f%sJobs.lis' %(self.obshistid, self.filter)
+        if os.path.isfile(scriptListFilename):
+            os.remove(scriptListFilename)
         try:
             cmd = 'ls %s/*.pbs > %s' %(self.paramDir, scriptListFilename)
             subprocess.check_call(cmd,shell=True)
             print 'Created qsub list.'
             print 'Finished tarring and moving files.  Ready to launch PBS scripts.'
         except:
-            print 'WARNING: No PBS files to list!'
-            pass
+            raise RuntimeError,  'WARNING: No PBS files to list!'
