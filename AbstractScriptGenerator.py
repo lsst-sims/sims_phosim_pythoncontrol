@@ -140,7 +140,7 @@ class AbstractScriptGenerator:
                                  os.path.join(self.imsimDataPath, self.tarball)))
                   cshOut.write('  cp %s . \n' %(os.path.join(self.imsimDataPath, self.tarball)))
                   cshOut.write('  echo Untarring %s \n' %(self.tarball))
-                  cshOut.write('  tar xzf %s \n' %(self.tarball))
+                  cshOut.write('  tar xf %s \n' %(self.tarball))
                   cshOut.write('  rm %s \n' %(self.tarball))
                   cshOut.write('  echo Finished copying shared data to exec node.\n')
                   cshOut.write('endif \n')
