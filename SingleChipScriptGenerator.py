@@ -77,7 +77,7 @@ class SingleChipScriptGenerator(AbstractScriptGenerator):
         self.useSharedData = self.policy.getboolean('general','useSharedSEDs')
         self.tarball = self.policy.get('general','dataTarballSEDs')
         if self.useSharedData == True:
-          self.scratchSharedPath = os.path.join(self.imsimDataPath,'sharedData')
+          self.scratchSharedPath = self.imsimDataPath
         else:
           self.scratchSharedPath = self.policy.get('general','scratchDataPathSEDs')
         # writeCopySharedData() will check the existence of self.dataCheckDir

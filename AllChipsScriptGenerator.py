@@ -20,7 +20,7 @@ Notation: For naming the rafts, sensors, amplifiers, and exposures, we
 """
 
 from __future__ import with_statement
-import os, re, sys
+import os, sys
 import datetime
 import glob
 import math
@@ -32,46 +32,10 @@ import chip
 
 from SingleChipScriptGenerator import *
 from chip import WithTimer
+from Focalplane import *
 #import lsst.pex.policy as pexPolicy
 #import lsst.pex.logging as pexLog
 #import lsst.pex.exceptions as pexExcept
-
-def readCidList(camstr, fplFile):
-    """Search the focalplanelayout file for lines in fplFile matching
-    the regex in camstr.  Return a list from the matching lines.
-    Each list element is a tuple (cid, devtype, float(devvalue))
-    """
-    cidList = []
-    p = re.compile(camstr)
-    for line in fplFile.readlines():
-        if p.search(line):
-            c = line.split()
-            cidList.append( (c[0],c[6],float(c[7])) )
-    return cidList
-
-class ParFileNames:
-    """
-    A simple class to try to keep all the filename definitions in one place.
-    key:
-      ex  = 0 or 1
-      id  = 'R'+rx+ry+'_'+'S'+sx+sy+'_'+'E00'+ex
-
-    """
-    def time(self, obshistid, exid):
-        return 'time_%s_%s.pars' %(obshistid, exid)
-
-    def chip(self, obshistid, id):
-        return 'chip_%s_%s.pars' %(obshistid, id)
-
-    def raytrace(self, obshistid, id):
-        return 'raytracecommands_%s_%s.pars' %(obshistid, id)
-
-    def background(self, obshistid, id):
-        return 'background_%s_%s.pars' %(obshistid, id)
-
-    def cosmic(self, obshistid, id):
-        return 'cosmic_%s_%s.pars' %(obshistid, id)
-
 
 class AllChipsScriptGenerator:
     """
@@ -86,7 +50,7 @@ class AllChipsScriptGenerator:
     exposure instead of the full focal plane.
     """
 
-    def __init__(self, trimfile, policy):
+    def __init__(self, trimfile, policy, extraidFile):
 
         """
 
@@ -140,6 +104,19 @@ class AllChipsScriptGenerator:
             self._readTrimfile(trimfile)
         self._calculateParams()
 
+        # Get non-default commands & extra ID
+        self.centid = '0'
+        self.extraidFile = extraidFile.strip()
+        if self.extraidFile != '':
+            for line in open(self.extraidFile).readlines():
+                if line.startswith('extraid'):
+                    name, self.extraid = line.split()
+                    print 'extraid:', self.extraid
+                    if self.extraid != '':
+                        self.obshistid = self.obshistid+self.extraid
+                if line.startswith('centroidfile'):
+                    name, self.centid = line.split()
+        print 'Centroid FileID:', self.centid
 
         # SET USEFUL DIRECTORY PATHS
 
@@ -168,16 +145,19 @@ class AllChipsScriptGenerator:
         # NOTE: This might not be in the right location, but I never ran with self.centid==1.
         self.centroidPath = os.path.join(self.stagePath, 'imSim/PT1.2/centroid/v%s-f%s' %(self.obshistid, self.filter))
 
+        self.Focalplane = Focalplane(self.obshistid, self.filter)
+        _d = self.Focalplane.parsDictionary
         # Parameter File Names
-        self.obsCatFile = 'objectcatalog_%s.pars' %(self.obshistid)
-        self.obsParFile = 'obs_%s.pars' %(self.obshistid)
-        self.atmoParFile = 'atmosphere_%s.pars' %(self.obshistid)
-        self.atmoRaytraceFile = 'atmosphereraytrace_%s.pars' %(self.obshistid)
-        self.cloudRaytraceFile = 'cloudraytrace_%s.pars' %(self.obshistid)
-        self.opticsParFile = 'optics_%s.pars' %(self.obshistid)
-        self.catListFile = 'catlist_%s.pars' %(self.obshistid)
-        self.trackingParFile = 'tracking_%s.pars' %(self.obshistid)
-
+        self.obsCatFile        = _d['objectcatalog']
+        self.obsParFile        = _d['obs']
+        self.atmoParFile       = _d['atmosphere']
+        self.atmoRaytraceFile  = _d['atmosphereraytrace']
+        self.cloudRaytraceFile = _d['cloudraytrace']
+        self.controlParFile    = _d['control']
+        self.opticsParFile     = _d['optics']
+        self.catListFile       = _d['catlist']
+        self.trackingParFile   = _d['tracking']
+        self.trackParFile      = _d['track']
         return                
 
     def _readTrimfile(self, trimfile):
@@ -308,24 +288,6 @@ class AllChipsScriptGenerator:
             raise RuntimeError, "SIM_CAMCONFIG=%d is not valid." % self.camconfig
         return
 
-    def _makePaths(self):
-        if not os.path.isdir(self.logPath):
-          os.makedirs(self.logPath)
-        print 'Your logfile directory is: ', self.logPath
-
-        if not os.path.isdir(self.paramDir):
-          os.makedirs(self.paramDir)
-        print 'Your parameter staging directory is: ', self.paramDir
-
-        if self.centid == '1':
-            if not os.path.isdir(self.centroidPath):
-                try:
-                    os.makedirs(self.centroidPath)
-                except OSError:
-                    pass
-            print 'Your centroid directory is %s' %(self.centroidPath)
-
-        return
 
     def makeScripts(self, extraidFile, idonly=""):
         """This is the main public method for this class.
@@ -353,20 +315,26 @@ class AllChipsScriptGenerator:
             with open('lsst/focalplanelayout.txt', 'r') as fplfile:
                 self.cidList = readCidList(self.camstr, fplfile)
 
-        # Get non-default commands & extra ID
-        self.centid = '0'
-        self.extraidFile = extraidFile.strip()
-        if self.extraidFile != '':
-            for line in open(self.extraidFile).readlines():
-                if line.startswith('extraid'):
-                    name, self.extraid = line.split()
-                    print 'extraid:', self.extraid
-                    if self.extraid != '':
-                        self.obshistid = self.obshistid+self.extraid
-                if line.startswith('centroidfile'):
-                    name, self.centid = line.split()
-        print 'Centroid FileID:', self.centid
         self._makePaths()
+        return
+
+    def _makePaths(self):
+        if not os.path.isdir(self.logPath):
+          os.makedirs(self.logPath)
+        print 'Your logfile directory is: ', self.logPath
+
+        if not os.path.isdir(self.paramDir):
+          os.makedirs(self.paramDir)
+        print 'Your parameter staging directory is: ', self.paramDir
+
+        if self.centid == '1':
+            if not os.path.isdir(self.centroidPath):
+                try:
+                    os.makedirs(self.centroidPath)
+                except OSError:
+                    pass
+            print 'Your centroid directory is %s' %(self.centroidPath)
+
         return
 
     def _runPreprocessingCommands(self):
@@ -631,15 +599,10 @@ class AllChipsScriptGenerator:
         """
 
         print 'Creating Control and Optics Parameter Files.'
-        controlParFile = 'control_%s.pars' %(self.obshistid)
 
-        try:
+        if os.path.isfile(self.controlParFile):
             os.remove(self.controlParFile)
-        except:
-            #print 'WARNING: No file %s to remove!' %(controlParFile)
-            pass
-
-        with file(controlParFile, 'a') as parFile:
+        with file(self.controlParFile, 'a') as parFile:
             parFile.write('outputfilename %s \n' %(self.opticsParFile))
             #parFile.write('detectormode 0 \n')
             parFile.write('zenith %s \n' %(self.zen))
@@ -647,7 +610,7 @@ class AllChipsScriptGenerator:
             parFile.write('optics_parameters \n')
 
         os.chdir('ancillary/optics_parameters')
-        cmd = 'time ./optics_parameters < ../../%s' %(controlParFile)
+        cmd = 'time ./optics_parameters < ../../%s' %(self.controlParFile)
         sys.stderr.write('Running: %s\n'% cmd)
         with WithTimer() as t:
           subprocess.check_call(cmd, shell=True)
@@ -667,15 +630,15 @@ class AllChipsScriptGenerator:
 
         """
         print 'Creating Tracking Parameter Files.'
-        trackParFile = 'track_%s.pars' %(self.obshistid)
+        trackParFile = self.trackParFile
 
         try:
-            os.remove(trackParFile)
+            os.remove(self.trackParFile)
         except:
             #print 'WARNING: No file %s to remove!' %(trackParFile)
             pass
 
-        with file(trackParFile, 'a') as parFile:
+        with file(self.trackParFile, 'a') as parFile:
             parFile.write('outputfilename %s \n' %(self.trackingParFile))
             parFile.write('seed %s \n' %(self.obsid))
             parFile.write('starttime %s \n' %(self.starttime))
@@ -683,7 +646,7 @@ class AllChipsScriptGenerator:
             parFile.write('tracking \n')
 
         os.chdir('ancillary/tracking')
-        cmd = 'time ./tracking < ../../%s' %(trackParFile)
+        cmd = 'time ./tracking < ../../%s' %(self.trackParFile)
         sys.stderr.write('Running: %s\n'% cmd)
         with WithTimer() as t:
           subprocess.check_call(cmd, shell=True)
@@ -705,7 +668,7 @@ class AllChipsScriptGenerator:
         cmd = 'cat %s ' % trimCatFile
         #cmd = cmd + '| egrep \'starSED|galaxySED|ssmSED|agnSED|flatSED|sky\' | awk \'{print "../data/"$6", \\\\"}\' '
         cmd = cmd + '| egrep \'starSED|galaxySED|ssmSED|agnSED|flatSED|sky\' | awk \'{print $6 }\' '
-        cmd = cmd + '| sort | uniq > sedlist_%s_%s.txt' %(self.obshistid, cid)
+        cmd = cmd + '| sort | uniq > %s' % ParsFilenames(self.obshistid).sedlist(cid)
         print 'Executing command:'
         print '  ' + cmd
         subprocess.check_call(cmd, shell=True)
@@ -794,7 +757,7 @@ class AllChipsScriptGenerator:
         For LSST Group1 CCDs, this is 378 single-chip exposures per focal plane.
 
         """
-        parNames = ParFileNames()
+        parNames = ParsFilenames(self.obshistid)
         count = 1
         cc = 0
         for chip in self.cidList:
@@ -837,9 +800,10 @@ class AllChipsScriptGenerator:
                 ex = 0
                 while ex < nexp:
                     expid = 'E%03d' %ex
-                    expTrimCatFile = 'trimcatalog_%s_%s_%s.pars.gz' %(self.obshistid, cid, expid)
+                    id = '%s_%s' %(cid, expid)
+                    expTrimCatFile = parNames.trimcatalog(id)
                     shutil.copyfile(trimCatFile, expTrimCatFile)
-                    timeParFile = parNames.time(self.obshistid, expid)
+                    timeParFile = parNames.time(expid)
                     if os.path.isfile(timeParFile):
                         os.remove(timeParFile)
                     if devtype == 'CCD':
@@ -852,10 +816,9 @@ class AllChipsScriptGenerator:
                         parFile.write('timeoffset %f \n' %timeoff)
                         parFile.write('pairid %d \n' %ex)
                         parFile.write('exptime %f \n' %exptime)
-                    id = '%s_%s' %(cid, expid)
                     seedchip = int(self.obsid) + cc*1000 + ex
                     cc += 1
-                    chipParFile = parNames.chip(self.obshistid, id)
+                    chipParFile = parNames.chip(id)
                     if os.path.isfile(chipParFile):
                         os.remove(chipParFile)
                     shutil.copyfile('data/focal_plane/sta_misalignments/offsets/pars_%s' %(cid), chipParFile)
@@ -865,16 +828,16 @@ class AllChipsScriptGenerator:
                         parFile.write('chipheightfile ../data/focal_plane/sta_misalignments/height_maps/%s.fits.gz \n' %(cid))
                     # GENERATE THE RAYTRACE PARS
                     print 'Generating raytrace pars.'
-                    raytraceParFile = parNames.raytrace(self.obshistid, id)
+                    raytraceParFile = parNames.raytrace(id)
                     self.generateRaytraceParams(id, chipParFile, seedchip, timeParFile,
                                            raytraceParFile)
                     # GENERATE THE BACKGROUND ADDER PARS
                     print 'Generating background pars.'
-                    backgroundParFile = parNames.background(self.obshistid, id)
+                    backgroundParFile = parNames.background(id)
                     self.generateBackgroundParams(id, seedchip, cid, wav, backgroundParFile)
                     # GENERATE THE COSMIC RAY ADDER PARS
                     print 'Generating cosmic rays pars'
-                    cosmicParFile = parNames.cosmic(self.obshistid, id)
+                    cosmicParFile = parNames.cosmic(id)
                     self.generateCosmicRayParams(id, seedchip, exptime, cosmicParFile)
                     # GENERATE THE ELECTRON TO ADC CONVERTER PARS
                     print 'Generating e2adc pars.'
@@ -1006,7 +969,7 @@ class AllChipsScriptGenerator:
         (11) Create and return the E2ADC parameter file.
         """
 
-        e2adcParFile = 'e2adc_%s_%s.pars' %(self.obshistid, id)
+        e2adcParFile = ParsFilenames(self.obshistid).e2adc(id)
         cmd = 'cat data/focal_plane/sta_misalignments/readout/readoutpars_%s >> %s' \
               %(cid, e2adcParFile)
         subprocess.check_call(cmd, shell=True)
@@ -1043,14 +1006,14 @@ class AllChipsScriptGenerator:
             os.chdir('%s' %(self.workDir))
             # Files needed for ancillary/atmosphere
             print 'Tarring atmosphere files.'
-            cmd =  'tar cvf %s' % nodeFilesTar
-            cmd += ' atmospherescreen_%s_*.fits cloudscreen_%s_*.fits cloudraytrace_%s.pars' %(self.obshistid, self.obshistid, self.obshistid)
-            cmd += ' control_%s.pars objectcatalog_%s.pars' %(self.obshistid, self.obshistid)
+            cmd =  'tar cf %s' % nodeFilesTar
+            cmd += ' atmospherescreen_%s_*.fits cloudscreen_%s_*.fits' %(self.obshistid, self.obshistid)
+            cmd += ' %s %s %s' %(self.cloudRaytraceFile, self.controlParFile, self.obsCatFile)
             subprocess.check_call(cmd, shell=True)
 
             # LSST parameter files
             print 'Tarring lsst.'
-            cmd =  'tar rvf %s lsst/*.txt' % nodeFilesTar
+            cmd =  'tar rf %s lsst/*.txt' % nodeFilesTar
             subprocess.check_call(cmd, shell=True)
             
             # Files for ancillary/Add_Background
@@ -1091,7 +1054,7 @@ class AllChipsScriptGenerator:
 
     def _tarExecFiles(self, nodeFilesTar):
         print 'Tarring binaries/executables.'
-        cmd = 'tar rvf %s ancillary/trim/trim ancillary/Add_Background/* ancillary/cosmic_rays/* ancillary/e2adc/e2adc raytrace/lsst raytrace/*.txt  raytrace/version pbs/distributeFiles.py chip.py' % nodeFilesTar
+        cmd = 'tar rf %s ancillary/trim/trim ancillary/Add_Background/* ancillary/cosmic_rays/* ancillary/e2adc/e2adc raytrace/lsst raytrace/*.txt  raytrace/version pbs/distributeFiles.py chip.py' % nodeFilesTar
         subprocess.check_call(cmd, shell=True)
         return
 

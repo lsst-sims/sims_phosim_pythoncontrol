@@ -52,11 +52,11 @@ def main(trimfile, imsimConfigFile, extraidFile, id):
     scheduler = policy.get('general','scheduler2')
     with WithTimer() as t:
         if scheduler == 'csh':
-            scriptGenerator = AllChipsScriptGenerator(trimfile, policy, extraidFile, id)
-            scriptGenerator.makeScripts()
+            scriptGenerator = AllChipsScriptGenerator(trimfile, policy, extraidFile)
+            scriptGenerator.makeScripts(id)
         elif scheduler == 'pbs':
-            scriptGenerator = AllChipsScriptGenerator_Pbs(trimfile, policy, extraidFile, id)
-            scriptGenerator.makeScripts()
+            scriptGenerator = AllChipsScriptGenerator_Pbs(trimfile, policy, extraidFile)
+            scriptGenerator.makeScripts(id)
         elif scheduler == 'exacycle':
             print "Exacycle funtionality not added yet."
             quit()
