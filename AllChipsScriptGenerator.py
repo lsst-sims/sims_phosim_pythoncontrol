@@ -86,7 +86,7 @@ class AllChipsScriptGenerator:
     exposure instead of the full focal plane.
     """
 
-    def __init__(self, trimfile, policy, extraidFile, idonly=""):
+    def __init__(self, trimfile, policy):
 
         """
 
@@ -97,7 +97,6 @@ class AllChipsScriptGenerator:
 
         """
 
-        self.idonly = idonly
         self.policy = policy
         # Should not ever reference imsimSourcePath on exec node
         #self.imsimHomePath = os.getenv("IMSIM_SOURCE_PATH")
@@ -140,28 +139,6 @@ class AllChipsScriptGenerator:
         with open(self.trimfile,'r') as trimfile:
             self._readTrimfile(trimfile)
         self._calculateParams()
-        # Build the list of cids to process
-        if idonly:
-            raftid, sid, expid = self.idonly.split("_")
-            self.cidList = ('R%s_S%s' %(raftid, sid),
-                            'CCD', 3.0)
-        else:
-            with open('lsst/focalplanelayout.txt', 'r') as fplfile:
-                self.cidList = readCidList(self.camstr, fplfile)
-
-        # Get non-default commands & extra ID
-        self.centid = '0'
-        self.extraidFile = extraidFile.strip()
-        if self.extraidFile != '':
-            for line in open(self.extraidFile).readlines():
-                if line.startswith('extraid'):
-                    name, self.extraid = line.split()
-                    print 'extraid:', self.extraid
-                    if self.extraid != '':
-                        self.obshistid = self.obshistid+self.extraid
-                if line.startswith('centroidfile'):
-                    name, self.centid = line.split()
-        print 'Centroid FileID:', self.centid
 
 
         # SET USEFUL DIRECTORY PATHS
@@ -350,13 +327,54 @@ class AllChipsScriptGenerator:
 
         return
 
+    def makeScripts(self, extraidFile, idonly=""):
+        """This is the main public method for this class.
+        It generates all of the scripts for performing the raytracing
+        phase on each chip (really, each exposure for each chip).
+        It is comprised of the following 4 stages.
+        """
+        self._setupScriptEnvironment(extraidFile, idonly)
+        wav = self._runPreprocessingCommands()
+        self._generateScripts(wav)
+        self._stageAndCleanupFiles()
+        return
+        
+    def _setupScriptEnvironment(self, extraidFile, idonly):
+        """Configures the necessary variables and directories
+        for generating the scripts for the raytracing phase.
+        """
+        self.idonly = idonly
+        # Build the list of cids to process
+        if idonly:
+            raftid, sid, expid = self.idonly.split("_")
+            self.cidList = ('R%s_S%s' %(raftid, sid),
+                            'CCD', 3.0)
+        else:
+            with open('lsst/focalplanelayout.txt', 'r') as fplfile:
+                self.cidList = readCidList(self.camstr, fplfile)
 
-    def makeScripts(self):
+        # Get non-default commands & extra ID
+        self.centid = '0'
+        self.extraidFile = extraidFile.strip()
+        if self.extraidFile != '':
+            for line in open(self.extraidFile).readlines():
+                if line.startswith('extraid'):
+                    name, self.extraid = line.split()
+                    print 'extraid:', self.extraid
+                    if self.extraid != '':
+                        self.obshistid = self.obshistid+self.extraid
+                if line.startswith('centroidfile'):
+                    name, self.centid = line.split()
+        print 'Centroid FileID:', self.centid
+        self._makePaths()
+        return
+
+    def _runPreprocessingCommands(self):
+
         """
         This is the main worker routine.  It just goes through and calls
         all of Nicole's original functions.
         """
-        self._makePaths()
         self.writeObsCatParams()
         self.generateAtmosphericParams()
         wav = self.generateAtmosphericScreen()
@@ -364,6 +382,12 @@ class AllChipsScriptGenerator:
         self.generateControlParams()
         self.generateTrackingParams()
         self.generateTrimCatalog()
+        return wav
+
+    def _generateScripts(self, wav):
+        """Calls the proper SingleChipScriptGenerator class for each chip.
+        INPUTS: wavelength returned from generateAtmosphericScreen()
+        """
         # The SingleChipScriptGenerator class is designed so that only a single instance
         # needs to be called per execution of fullFocalPlane.py.  You can just call the
         # makeScript() method to create a script for each chip.
@@ -371,9 +395,8 @@ class AllChipsScriptGenerator:
                                               self.filt, self.centid, self.centroidPath,
                                               self.stagePath2, self.paramDir,
                                               self.trackingParFile)
-        self.loopOverChips(scriptGen, wav)
-        self.cleanup()
-
+        self._loopOverChips(scriptGen, wav)
+        return
 
     def writeObsCatParams(self):
 
@@ -763,7 +786,7 @@ class AllChipsScriptGenerator:
             print 'Processed trimcatalog file %s.' %(trimCatFile)
         return
     
-    def loopOverChips(self, scriptGen, wav):
+    def _loopOverChips(self, scriptGen, wav):
 
         """
         For every chip in self.cidList, then for every exposure, generate
@@ -998,7 +1021,7 @@ class AllChipsScriptGenerator:
             parFile.write('e2adc \n')
         return
 
-    def cleanup(self):
+    def _stageAndCleanupFiles(self):
         """
 
         Make tarball of needed files for local nodes, create directories
@@ -1142,19 +1165,10 @@ class AllChipsScriptGenerator_Pbs(AllChipsScriptGenerator):
         print 'Your PBS username is: ', self.username
         return
 
-    def makeScripts(self):
+    def _generateScripts(self):
+        """Calls the proper SingleChipScriptGenerator class for each chip.
+        INPUTS: wavelength returned from generateAtmosphericScreen()
         """
-        This is the main worker routine.  It just goes through and calls
-        all of Nicole's original functions.
-        """
-        self._makePaths()
-        self.writeObsCatParams()
-        self.generateAtmosphericParams()
-        wav = self.generateAtmosphericScreen()
-        self.generateCloudScreen()
-        self.generateControlParams()
-        self.generateTrackingParams()
-        self.generateTrimCatalog()
         # The SingleChipScriptGenerator class is designed so that only a single instance
         # needs to be called per execution of fullFocalPlane.py.  You can just call the
         # makeScript() method to create a script for each chip.
@@ -1163,7 +1177,7 @@ class AllChipsScriptGenerator_Pbs(AllChipsScriptGenerator):
                                                   self.stagePath2, self.paramDir,
                                                   self.trackingParFile)
         self.loopOverChips(scriptGen, wav)
-        self.cleanup()
+        return
 
     def _cleanupScriptFiles(self):
         # Deal with the pbs and command files if created (not single chip mode).

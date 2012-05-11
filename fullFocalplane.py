@@ -29,6 +29,7 @@ Options: trimfile:    absolute path and name of the trimfile
          as the optional 4th argument.  R=Raft, S=Sensor, E=Exposure
 
 """
+from __future__ import with_statement
 import sys
 import ConfigParser
 from AllChipsScriptGenerator import *

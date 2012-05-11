@@ -133,10 +133,10 @@ class AbstractScriptGenerator:
                   cshOut.write('lockfile -l 1800 imsim_shared_data.lock \n')
                   cshOut.write('if (-d %s ) then \n' %self.dataCheckDir)
                   cshOut.write('  echo Good news everyone! The data directory %s already exists! \n'
-                               %(os.path.join(self.scratchSharedPath, 'data')))
+                               %self.scratchSharedPath)
                   cshOut.write('else \n')
-                  cshOut.write('  echo The data directory %s does not exist. Copying %s. \n'
-                               %(os.path.join(self.scratchSharedPath, 'data'),
+                  cshOut.write('  echo The sharedData directory %s does not exist. Copying %s. \n'
+                               %(self.scratchSharedPath,
                                  os.path.join(self.imsimDataPath, self.tarball)))
                   cshOut.write('  cp %s . \n' %(os.path.join(self.imsimDataPath, self.tarball)))
                   cshOut.write('  echo Untarring %s \n' %(self.tarball))
