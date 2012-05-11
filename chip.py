@@ -49,6 +49,30 @@ import shutil
 import subprocess
 import string
 import gzip
+import time
+
+class WithTimer:
+    """http://preshing.com/20110924/timing-your-code-using-pythons-with-statement"""
+    def __enter__(self):
+        self.startCpu = time.clock()
+        self.startWall = time.time()
+        return self
+
+    def __exit__(self, *args):
+        self.interval = []
+        self.interval.append(time.clock() - self.startCpu)
+        self.interval.append(time.time() - self.startWall)
+
+    def Print(self, name, stream):
+      stream.write('TIMER[%s]: cpu: %f sec  wall: %f sec\n' %(name, self.interval[0],
+                                                              self.interval[1]))
+
+    def PrintCpu(self, name, stream):
+      stream.write('TIMER[%s]: cpu: %f sec\n' %(name, self.interval[0]))
+
+    def PrintWall(self, name, stream):
+      stream.write('TIMER[%s]: wall: %f sec\n' %(name, self.interval[1]))
+
 
 def readAmpList(filename, cid):
     ampList = []
@@ -67,18 +91,27 @@ def makeChipImage(obshistid, filter, cid, expid, datadir):
     id = '%s_%s' %(cid, expid)
     
     lsstCmdFile       = 'lsst_%s_%s.pars' %(obshistid, id)
-    trimCatFile       = 'trimcatalog_%s_%s.pars' %(obshistid, id)
+    trimCatFile       = 'trimcatalog_%s_%s.pars.gz' %(obshistid, id)
     raytraceCmdFile   = 'raytracecommands_%s_%s.pars' %(obshistid, id)
     backgroundParFile = 'background_%s_%s.pars' %(obshistid, id) 
     cosmicParFile     = 'cosmic_%s_%s.pars' %(obshistid, id)  
     outputFile        = 'output_%s_%s.fits' %(obshistid, id)
 
     # RUN THE RAYTRACE
-    cmd = 'cat %s %s > %s' %(raytraceCmdFile, trimCatFile, lsstCmdFile )
+    trimCatTmp = '_tmp_%s' %trimCatFile
+    if os.path.isfile(trimCatTmp):
+      os.remove(trimCatTmp)
+    cmd = 'gunzip -c %s > %s' %(trimCatFile, trimCatTmp)
     subprocess.check_call(cmd, shell=True)
+    cmd = 'cat %s %s > %s' %(raytraceCmdFile, trimCatTmp, lsstCmdFile )
+    subprocess.check_call(cmd, shell=True)
+    os.remove(trimCatTmp)
     os.chdir('raytrace/')
-    cmd = './lsst < ../%s' %(lsstCmdFile)
-    subprocess.check_call(cmd, shell=True)
+    cmd = 'time ./lsst < ../%s' %(lsstCmdFile)
+    sys.stderr.write('Running: %s\n' %cmd)
+    with WithTimer() as t:
+      subprocess.check_call(cmd, shell=True)
+    t.PrintWall('lsst', sys.stderr)
     os.chdir('..')
 
     eimage = 'eimage_%s_f%s_%s.fits' %(obshistid, filter, id)
@@ -101,15 +134,21 @@ def makeChipImage(obshistid, filter, cid, expid, datadir):
         os.mkdir('ancillary/Add_Background/fits_files')
     shutil.move('raytrace/%s' %(image), 'ancillary/Add_Background/fits_files/%s' %(image))
     os.chdir('ancillary/Add_Background')
-    cmd = './add_background < ../../%s' %(backgroundParFile)
-    subprocess.check_call(cmd, shell=True)
+    cmd = 'time ./add_background < ../../%s' %(backgroundParFile)
+    sys.stderr.write('Running: %s\n' %cmd)
+    with WithTimer() as t:
+        subprocess.check_call(cmd, shell=True)
+    t.PrintWall('add_background', sys.stderr)
     if os.access('fits_files/%s_settings' %(image), os.F_OK):
         os.remove('fits_files/%s_settings' %(image))
 
     # ADD COSMIC RAYS
     os.chdir('../../ancillary/cosmic_rays')
-    cmd = ('./create_rays < ../../%s' %(cosmicParFile))
-    subprocess.check_call(cmd, shell=True)
+    cmd = 'time ./create_rays < ../../%s' %(cosmicParFile)
+    sys.stderr.write('Running: %s\n' %cmd)
+    with WithTimer() as t:
+        subprocess.check_call(cmd, shell=True)
+    t.PrintWall('create_rays', sys.stderr)
     os.remove('../Add_Background/fits_files/%s' %(image))
 
     f_in = open(outputFile, 'rb')
@@ -125,9 +164,11 @@ def makeChipImage(obshistid, filter, cid, expid, datadir):
     ampList = readAmpList('lsst/segmentation.txt', cid)
     os.chdir('ancillary/e2adc')
     eadc = 'e2adc_%s_%s.pars' %(obshistid, id)
-    print 'Running ./e2adc < ../../%s' %(eadc)
-    cmd = './e2adc < ../../%s' %(eadc)
-    subprocess.check_call(cmd, shell=True)
+    cmd = 'time ./e2adc < ../../%s' %(eadc)
+    sys.stderr.write('Running: %s\n' %cmd)
+    with WithTimer() as t:
+        subprocess.check_call(cmd, shell=True)
+    t.PrintWall('e2adc', sys.stderr)
 
     print 'From %s:' %os.getcwd()
     for ampid in ampList:
@@ -166,5 +207,6 @@ if __name__ == "__main__":
     expid = sys.argv[4]
     datadir = sys.argv[5]
 
-
-    makeChipImage(obshistid, filter, cid, expid, datadir)
+    with WithTimer() as t:
+        makeChipImage(obshistid, filter, cid, expid, datadir)
+    t.PrintWall('chip.py', sys.stderr)

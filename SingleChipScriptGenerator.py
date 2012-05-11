@@ -225,7 +225,7 @@ class SingleChipScriptGenerator(AbstractScriptGenerator):
                 # Set the soft link to the catalog directory
                 #
                 jobFile.write('echo Setting soft link to data directory. \n')
-                jobFile.write('ln -s %s data \n' %os.path.join(self.scratchSharedPath, 'sharedData'))
+                jobFile.write('ln -s %s data \n' % self.scratchSharedPath)
                 #
                 # Create the scratch output directory
                 #
@@ -270,9 +270,9 @@ class SingleChipScriptGenerator(AbstractScriptGenerator):
                 print >>jobFile, "### ---------------------------------------"
                 print >>jobFile, " "
                 jobFile.write('cd %s \n' %(wuPath))
-                jobFile.write('echo Running chip.py %s %s %s %s %s \n'
+                jobFile.write('echo Running: chip.py %s %s %s %s %s \n'
                               %(self.obshistid, self.filt, cid, expid, self.scratchOutputDir))
-                jobFile.write('%s chip.py %s %s %s %s %s \n'
+                jobFile.write('time %s chip.py %s %s %s %s %s \n'
                               %(self.pythonExec, self.obshistid, self.filt, cid, expid,
                                 self.scratchOutputDir))
                 if self.centid == '1':

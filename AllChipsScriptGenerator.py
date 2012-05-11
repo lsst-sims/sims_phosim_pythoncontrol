@@ -31,6 +31,7 @@ import time
 import chip
 
 from SingleChipScriptGenerator import *
+from chip import WithTimer
 #import lsst.pex.policy as pexPolicy
 #import lsst.pex.logging as pexLog
 #import lsst.pex.exceptions as pexExcept
@@ -502,8 +503,11 @@ class AllChipsScriptGenerator:
             parFile.write('createatmosphere\n')
 
         os.chdir('ancillary/atmosphere_parameters')
-        cmd = './create_atmosphere < ../../%s' %(self.atmoParFile)
-        subprocess.check_call(cmd, shell=True)
+        cmd = 'time ./create_atmosphere < ../../%s' %(self.atmoParFile)
+        sys.stderr.write('Running: %s\n'% cmd)
+        with WithTimer() as t:
+          subprocess.check_call(cmd, shell=True)
+        t.PrintWall('create_atmosphere', sys.stderr)
         # Do a copy then remove, since shutil.copy() overwrites.
         shutil.copy('%s' %(self.atmoRaytraceFile), '../../')
         os.remove(self.atmoRaytraceFile)
@@ -541,9 +545,11 @@ class AllChipsScriptGenerator:
             else:
                 wav = 0.97
             atmoScreen = 'atmospherescreen_%s_%s' %(self.obshistid, screen)
-            cmd = './turb2d -seed %s%s -see5 %s -outerx 50000.0 -outers %s -zenith %s -wavelength %s -name %s' %(self.obsid, screen, self.rawseeing, low, self.zen, wav, atmoScreen)
-            print cmd
-            subprocess.check_call(cmd, shell=True)
+            cmd = 'time ./turb2d -seed %s%s -see5 %s -outerx 50000.0 -outers %s -zenith %s -wavelength %s -name %s' %(self.obsid, screen, self.rawseeing, low, self.zen, wav, atmoScreen)
+            sys.stderr.write('Running: %s\n'% cmd)
+            with WithTimer() as t:
+              subprocess.check_call(cmd, shell=True)
+            t.PrintWall('turb2d', sys.stderr)
 
             shutil.move('%s_density_coarse.fits' %(atmoScreen), '../../')
             shutil.move('%s_density_medium.fits' %(atmoScreen), '../../')
@@ -583,9 +589,11 @@ class AllChipsScriptGenerator:
                     name, num, height = line.split()
             print 'Height: ', height
             cloudScreen = 'cloudscreen_%s_%s' %(self.obshistid, screen)
-            cmd = './cloud -seed %s%s -height %s -name %s -pix 100' %(self.obsid, screen, height, cloudScreen)
-            subprocess.check_call(cmd, shell=True)
-            print cmd
+            cmd = 'time ./cloud -seed %s%s -height %s -name %s -pix 100' %(self.obsid, screen, height, cloudScreen)
+            sys.stderr.write('Running: %s\n'% cmd)
+            with WithTimer() as t:
+              subprocess.check_call(cmd, shell=True)
+            t.PrintWall('cloud', sys.stderr)
             shutil.move('%s.fits' %(cloudScreen), '../../')
             with file('../../%s' %(self.cloudRaytraceFile), 'a') as parFile:
                 parFile.write('cloudfile %s ../%s \n' %(screen, cloudScreen))
@@ -616,8 +624,11 @@ class AllChipsScriptGenerator:
             parFile.write('optics_parameters \n')
 
         os.chdir('ancillary/optics_parameters')
-        cmd = './optics_parameters < ../../%s' %(controlParFile)
-        subprocess.check_call(cmd, shell=True)
+        cmd = 'time ./optics_parameters < ../../%s' %(controlParFile)
+        sys.stderr.write('Running: %s\n'% cmd)
+        with WithTimer() as t:
+          subprocess.check_call(cmd, shell=True)
+        t.PrintWall('optics_parameters', sys.stderr)
         shutil.move('%s' %(self.opticsParFile), '../../')
         os.chdir('../../')
 
@@ -649,8 +660,11 @@ class AllChipsScriptGenerator:
             parFile.write('tracking \n')
 
         os.chdir('ancillary/tracking')
-        cmd = './tracking < ../../%s' %(trackParFile)
-        subprocess.check_call(cmd, shell=True)
+        cmd = 'time ./tracking < ../../%s' %(trackParFile)
+        sys.stderr.write('Running: %s\n'% cmd)
+        with WithTimer() as t:
+          subprocess.check_call(cmd, shell=True)
+        t.PrintWall('tracking', sys.stderr)
         shutil.move('%s' %(self.trackingParFile), '../../')
         os.chdir('../../')
 
@@ -729,8 +743,11 @@ class AllChipsScriptGenerator:
 
                 print 'Running TRIM for cid %s.' %cid
                 os.chdir('ancillary/trim')
-                cmd = './trim < ../../%s' %(trimParFile)
-                subprocess.check_call(cmd, shell=True)
+                cmd = 'time ./trim < ../../%s' %(trimParFile)
+                sys.stderr.write('Running: %s\n'% cmd)
+                with WithTimer() as t:
+                  subprocess.check_call(cmd, shell=True)
+                t.PrintWall('trim', sys.stderr)
                 print 'Finished Running TRIM.'
                 os.chdir('../..')
                 os.remove(trimParFile)
@@ -776,7 +793,13 @@ class AllChipsScriptGenerator:
                 # in sedlist_*.txt
                 if self.useSharedSEDs == True:
                   self.writeSedManifest(trimCatFile, cid)
-
+                # Now that we are done reading from trimCatFile, gzip it since
+                # these files get rather large
+                cmd = 'gzip %s' %trimCatFile
+                sys.stdout.write('Gzipping %s...' %trimCatFile)
+                subprocess.check_call(cmd, shell=True)
+                sys.stdout.write('Done.\n')
+                trimCatFile += '.gz'
                 devtype = chip[1]
                 devvalue = chip[2]
                 if devtype == 'CCD':
@@ -791,7 +814,7 @@ class AllChipsScriptGenerator:
                 ex = 0
                 while ex < nexp:
                     expid = 'E%03d' %ex
-                    expTrimCatFile = 'trimcatalog_%s_%s_%s.pars' %(self.obshistid, cid, expid)
+                    expTrimCatFile = 'trimcatalog_%s_%s_%s.pars.gz' %(self.obshistid, cid, expid)
                     shutil.copyfile(trimCatFile, expTrimCatFile)
                     timeParFile = parNames.time(self.obshistid, expid)
                     if os.path.isfile(timeParFile):
@@ -849,7 +872,7 @@ class AllChipsScriptGenerator:
                     print 'Count:', count
                     count += 1
                     ex += 1
-                os.remove(trimCatFile)
+            os.remove(trimCatFile)  # if nTrimCatSources >= self.minsource:
         return
 
 
@@ -1068,8 +1091,8 @@ class AllChipsScriptGenerator:
         return
 
     def _cleanupParFiles(self):
-        print 'Moving .par files to %s.' %(self.paramDir)
-        for pars in glob.glob('*.pars'):
+        print 'Moving .par and .par.gz files to %s.' %(self.paramDir)
+        for pars in (glob.glob('*.pars')+glob.glob('*.pars.gz')):
           shutil.copy(pars, '%s' %(self.paramDir))
           os.remove(pars)
         return

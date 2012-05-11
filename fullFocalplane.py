@@ -29,8 +29,10 @@ Options: trimfile:    absolute path and name of the trimfile
          as the optional 4th argument.  R=Raft, S=Sensor, E=Exposure
 
 """
+import sys
 import ConfigParser
 from AllChipsScriptGenerator import *
+from chip import WithTimer
 
 def main(trimfile, imsimConfigFile, extraidFile, id):
 
@@ -47,18 +49,19 @@ def main(trimfile, imsimConfigFile, extraidFile, id):
     policy.read(imsimConfigFile)
     # Determine the pre-processing scheduler so that we know which class to use
     scheduler = policy.get('general','scheduler2')
-    if scheduler == 'csh':
-        scriptGenerator = AllChipsScriptGenerator(trimfile, policy, extraidFile, id)
-        scriptGenerator.makeScripts()
-    elif scheduler == 'pbs':
-        scriptGenerator = AllChipsScriptGenerator_Pbs(trimfile, policy, extraidFile, id)
-        scriptGenerator.makeScripts()
-    elif scheduler == 'exacycle':
-        print "Exacycle funtionality not added yet."
-        quit()
-    else:
-        print "Scheduler '%s' unknown.  Use -h or --help for help." %(scheduler)
-
+    with WithTimer() as t:
+        if scheduler == 'csh':
+            scriptGenerator = AllChipsScriptGenerator(trimfile, policy, extraidFile, id)
+            scriptGenerator.makeScripts()
+        elif scheduler == 'pbs':
+            scriptGenerator = AllChipsScriptGenerator_Pbs(trimfile, policy, extraidFile, id)
+            scriptGenerator.makeScripts()
+        elif scheduler == 'exacycle':
+            print "Exacycle funtionality not added yet."
+            quit()
+        else:
+            print "Scheduler '%s' unknown.  Use -h or --help for help." %(scheduler)
+    t.PrintWall('fullFocalplane.py', sys.stderr)
 
 
 if __name__ == "__main__":
