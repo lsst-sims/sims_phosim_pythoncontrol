@@ -245,7 +245,15 @@ class SingleVisitScriptGenerator(AbstractScriptGenerator):
                 cshOut.write('which %s\n' %(self.pythonExec))
                 cshOut.write("time %s fullFocalplane.py %s %s %s\n"
                              %(self.pythonExec, trimfileBasename, self.imsimConfigFile, self.extraIdFile))
-                cshOut.write('cp %s_f%sJobs.lis %s \n'%(obshistid, filt, self.stagePath2))
+                cshOut.write("time %s verifyFiles.py --stage=raytrace_input %s %s %s\n"
+                             %(self.pythonExec, obshistid, filt, self.stagePath2))
+                cshOut.write('rm %s/%s_f%sJobs.lis \n'%(self.stagePath2, obshistid, filt))
+                cshOut.write("if ($status) then\n")
+                cshOut.write("  echo Error in verifyFiles.py!\n")
+                cshOut.write("else\n")
+                cshOut.write("  echo Output file verification completed with no errors.\n")
+                cshOut.write('  cp %s_f%sJobs.lis %s \n'%(obshistid, filt, self.stagePath2))
+                cshOut.write("endif\n")
 
                 #for lines in jobinput:
                 #    print >>pbsout, "%s" %(lines)

@@ -307,7 +307,7 @@ class AllChipsScriptGenerator:
         """
         self.idonly = idonly
         # Build the list of cids to process
-        self.cidList = self.Focalplane.generateCidList(self.idonly)
+        self.cidList = self.Focalplane.generateCidList(self.camstr, self.idonly)
         self._makePaths()
         return
 
@@ -1047,7 +1047,7 @@ class AllChipsScriptGenerator:
 
     def _tarExecFiles(self, nodeFilesTar):
         print 'Tarring binaries/executables.'
-        cmd = 'tar rf %s ancillary/trim/trim ancillary/Add_Background/* ancillary/cosmic_rays/* ancillary/e2adc/e2adc raytrace/lsst raytrace/*.txt  raytrace/version pbs/distributeFiles.py chip.py' % nodeFilesTar
+        cmd = 'tar rf %s ancillary/trim/trim ancillary/Add_Background/* ancillary/cosmic_rays/* ancillary/e2adc/e2adc raytrace/lsst raytrace/*.txt  raytrace/version pbs/distributeFiles.py Exposure.py Focalplane.py verifyFiles.py chip.py' % nodeFilesTar
         subprocess.check_call(cmd, shell=True)
         return
 

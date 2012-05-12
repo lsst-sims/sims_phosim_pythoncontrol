@@ -292,7 +292,7 @@ class AllVisitsScriptGenerator:
 
         cmd =  'tar czvf %s ' % os.path.join(self.tmpdir, self.controlFileTgzName)
         cmd += ' chip.py fullFocalplane.py AbstractScriptGenerator.py AllChipsScriptGenerator.py'
-        cmd += ' SingleChipScriptGenerator.py Focalplane.py %s %s' %(self.imsimConfigFile, self.extraIdFile)
+        cmd += ' SingleChipScriptGenerator.py Focalplane.py Exposure.py verifyFiles.py %s %s' %(self.imsimConfigFile, self.extraIdFile)
 
         print 'Tarring control and param files that will be copied to the execution node(s).'
         subprocess.check_call(cmd, shell=True)

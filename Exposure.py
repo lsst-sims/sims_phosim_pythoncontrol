@@ -31,7 +31,6 @@ def verifyFitsContents(corruptList, path, filename):
                               stdout=subprocess.PIPE, close_fds=True)
     output = p.stdout.readlines()[0]
     p.stdout.close()
-    print 'fitsverify returned result %s' %output
     if output.startswith("verification OK"):
         return True
     corruptList.append((fullpath, output))

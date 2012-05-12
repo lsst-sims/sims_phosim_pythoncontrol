@@ -275,6 +275,13 @@ class SingleChipScriptGenerator(AbstractScriptGenerator):
                 jobFile.write('time %s chip.py %s %s %s %s %s \n'
                               %(self.pythonExec, self.obshistid, self.filt, cid, expid,
                                 self.scratchOutputDir))
+                jobFile.write('time %s verifyFiles.py --stage=raytrace_exec --idlist=%s %s %s %s\n'
+                              %(self.pythonExec, id, self.obshistid, self.filter, self.scratchOutputDir))
+                jobFile.write("if ($status) then\n")
+                jobFile.write("  echo Error in verifyFiles.py!\n")
+                jobFile.write("else\n")
+                jobFile.write("  echo Output files successfully verified.\n")
+                jobFile.write("endif\n")
                 if self.centid == '1':
                     jobFile.write('echo Copying centroid file to %s \n' %(self.centroidPath))
                     jobFile.write('cp raytrace/centroid_imsim_%s_%s.txt %s \n' %(self.obshistid, id, self.centroidPath))
@@ -324,7 +331,8 @@ class SingleChipScriptGenerator(AbstractScriptGenerator):
         print >>jobOut, "%s pbs/distributeFiles.py %s %s/%s %s" %(self.pythonExec, self.savePath,
                                                                   scratchOutputPath, eimage, baseName)
 
-        ampList = chip.readAmpList('lsst/segmentation.txt', cid)
+        with open('lsst/segmentation.txt', 'r') as ampFile:
+          ampList = chip.readAmpList(ampFile, cid)
         for ampid in ampList:
             image = 'imsim_%s_f%s_%s_%s.fits.gz' %(self.obshistid, self.filt, ampid, expid)
             baseName = 'imsim'
