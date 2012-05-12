@@ -74,13 +74,29 @@ class WithTimer:
       stream.write('TIMER[%s]: wall: %f sec\n' %(name, self.interval[1]))
 
 
-def readAmpList(filename, cid):
+def readAmpList(ampFile, cid):
     ampList = []
-    with open(filename, 'r') as ampFile:
-        for line in ampFile.readlines():
-            if line.startswith('%s_' %cid):
-                ampList.append(line.split()[0])
+    for line in ampFile.readlines():
+        if line.startswith('%s_' %cid):
+            ampList.append(line.split()[0])
     return ampList
+
+def findSourceFile(filename):
+    """Looks for a file in both the cwd and in IMSIM_SOURCE_PATH.
+    'filename' should include the relative path from these locations, e.g.
+    'segmentation.txt'
+    """
+    if not os.path.isfile(filename):
+        #print filename, 'does not exist in cwd.  Checking IMSIM_SOURCE_PATH.'
+        imsimSourcePath = os.getenv("IMSIM_SOURCE_PATH")
+        if imsimSourcePath is None:
+            raise NameError('Could not find value for IMSIM_SOURCE_PATH needed to read %s.'
+                            % filename)
+        filename = os.path.join(imsimSourcePath, filename)
+        if not os.path.isfile(filename):
+            raise RuntimeError('Could not %s' %filename)
+    #print 'Found', filename
+    return filename
 
 def makeChipImage(obshistid, filter, cid, expid, datadir):
 
@@ -151,17 +167,21 @@ def makeChipImage(obshistid, filter, cid, expid, datadir):
     t.PrintWall('create_rays', sys.stderr)
     os.remove('../Add_Background/fits_files/%s' %(image))
 
-    f_in = open(outputFile, 'rb')
-    f_out = gzip.open('%s.gz' %(outputFile), 'wb')
-    f_out.writelines(f_in)
-    f_out.close()
-    f_in.close()
+    sys.stderr.write('gzipping %s\n' %outputFile)
+    with WithTimer() as t:
+        f_in = open(outputFile, 'rb')
+        f_out = gzip.open('%s.gz' %(outputFile), 'wb')
+        f_out.writelines(f_in)
+        f_out.close()
+        f_in.close()
+    t.PrintWall('gzip_%s'%outputFile, sys.stderr)
 
     os.chdir('../..')
 
 
     # RUN E2ADC CONVERTER
-    ampList = readAmpList('lsst/segmentation.txt', cid)
+    with open(findSourceFile('lsst/segmentation.txt'), 'r') as ampFile:
+        ampList = readAmpList(ampFile, cid)
     os.chdir('ancillary/e2adc')
     eadc = 'e2adc_%s_%s.pars' %(obshistid, id)
     cmd = 'time ./e2adc < ../../%s' %(eadc)

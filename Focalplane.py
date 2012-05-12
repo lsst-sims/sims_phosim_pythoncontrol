@@ -3,7 +3,10 @@
 Classes that manage a single ImSim full focal plane
 """
 
+from __future__ import with_statement
 import os, re, sys
+import chip
+from Exposure import verifyFileExistence
 
 def readCidList(camstr, fplFile):
     """Search the focalplanelayout file for lines in fplFile matching
@@ -54,17 +57,40 @@ class ParsFilenames(object):
     def trimcatalog(self, id):
         return 'trimcatalog_%s_%s.pars.gz' %(self.obshistid, id)
 
+class FileVerifyError(Exception):
+    """Base class for exceptions in this module."""
+    pass
+
+class FileNotFoundError(FileVerifyError):
+    """Could not find file.
+    Attributes:
+       filename:  Name of file
+    """
+    def __init__(self, filename):
+        self.filename = filename
+
+class FileSizeError(FileVerifyError):
+    """File is not above a size threshold
+    Attributes:
+       filename:       Name of file
+       filesize(int):  Size of file in bytes
+       minsize(int):   Minimum size of file
+    """
+    def __init__(self, filename, filesize, minsize):
+        self.filename = filename
+        self.filesize = filesize
+        self.minsize = minsize
 
 class Focalplane(object):
-    def __init__(self, _obshistid, _filter):
+    def __init__(self, obshistid, filterid):
         """
         NOTE: obsid = <obshistid>-f<filter>
               I should call this focalplaneId, but I don't want to get
               confused with exacycle where I build in campaign ids and
               timestamps and all that.
         """
-        self.obshistid = _obshistid
-        self.filter = _filter
+        self.obshistid = obshistid
+        self.filter = filterid
         self.obsid = '%s-f%s' %(self.obshistid, self.filter)
 
         # Dictionary of Parameter Filenames
@@ -80,38 +106,56 @@ class Focalplane(object):
         _d['tracking']       = 'tracking_%s.pars' %(self.obshistid)
         _d['track']          = 'track_%s.pars' %(self.obshistid)
         self.parsDictionary = _d
-        
+        self.cidList = []
+        self.camstr = ""
     
-    def _verifyFile(self, path, filename):
-        fullpath = os.path.join(path, filename)
-        if not os.path.isfile(fullpath):
-            raise RuntimeError, "File %s is not present." % fullpath
+
+    def _loadCidList(self, camstr, idonly):
+        if not self.cidList:
+            if idonly:
+                raftid, sensorid, expid = self.idonly.split("_")
+                self.cidList = ('R%s_S%s' %(raftid, sensorid),
+                                'CCD', 3.0)
+            else:
+                fplFilename = chip.findSourceFile('lsst/focalplanelayout.txt')
+                with open(fplFilename, 'r') as f:
+                    self.cidList = readCidList(camstr, f)
         return
+
+        
+    def generateCidList(self, camstr="", idonly=""):
+        if not camstr:
+            camstr = self.camstr
+        assert camstr
+        self._loadCidList(camstr, idonly)
+        return self.cidList
         
     def verifyInputFiles(self, stagePathRoot, idlist=""):
+        missingList = []
         stagePath = os.path.join(stagePathRoot, self.obsid)
         nodeFilesTgz = 'nodeFiles%s.tar.gz' %self.obshistid
-        self._verifyFile(stagePath, nodeFilesTgz)
+        verifyFileExistence(missingList, stagePath, nodeFilesTgz)
         paramPath = os.path.join(stagePath, 'run%s' %self.obshistid)
         for k,v in self.parsDictionary.iteritems():
-            self._verifyFile(paramPath, v)
-        idsToVerify = self._exposureListFromFiles(paramPath, idlist)
+            verifyFileExistence(missingList, paramPath, v)
+        idsToVerify = self.idListFromExecFiles(paramPath, idlist)
         pfn = ParsFilenames(self.obshistid)
         for id in idsToVerify:
-            print 'Checking files for id=%s' %id
+            if idlist:
+                print 'Checking files for id=%s' %id
             Rxx, Sxx, expid = id.split('_')
             cid = '%s_%s' %(Rxx, Sxx)
-            self._verifyFile(paramPath, pfn.time(expid))
-            self._verifyFile(paramPath, pfn.chip(id))
-            self._verifyFile(paramPath, pfn.raytrace(id))
-            self._verifyFile(paramPath, pfn.background(id))
-            self._verifyFile(paramPath, pfn.cosmic(id))
-            self._verifyFile(paramPath, pfn.e2adc(id))
-            self._verifyFile(paramPath, pfn.sedlist(cid))
-            self._verifyFile(paramPath, pfn.trimcatalog(id))
-        return True
+            verifyFileExistence(missingList, paramPath, pfn.time(expid))
+            verifyFileExistence(missingList, paramPath, pfn.chip(id))
+            verifyFileExistence(missingList, paramPath, pfn.raytrace(id))
+            verifyFileExistence(missingList, paramPath, pfn.background(id))
+            verifyFileExistence(missingList, paramPath, pfn.cosmic(id))
+            verifyFileExistence(missingList, paramPath, pfn.e2adc(id))
+            verifyFileExistence(missingList, paramPath, pfn.sedlist(cid))
+            verifyFileExistence(missingList, paramPath, pfn.trimcatalog(id))
+        return missingList
 
-    def _exposureListFromFiles(self, paramPath, in_exp_list):
+    def idListFromExecFiles(self, paramPath, in_exp_list):
         """
         Generates a list of exposure IDs for each exec_* file in
         stagePath2. If the input _exp_list is not empty,

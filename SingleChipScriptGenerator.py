@@ -82,7 +82,7 @@ class SingleChipScriptGenerator(AbstractScriptGenerator):
           self.scratchSharedPath = self.policy.get('general','scratchDataPathSEDs')
         # writeCopySharedData() will check the existence of self.dataCheckDir
         # to determine if it needs to grab and untar self.tarball.
-        self.dataCheckDir = 'sharedData/starSED/gizis_SED'
+        self.dataCheckDir = 'starSED/gizis_SED'
         # Directories and filenames
         self.savePath  = self.policy.get('general','savePath')
         self.scratchPath = self.policy.get('general','scratchExecPath')

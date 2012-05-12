@@ -28,10 +28,10 @@ import shutil
 import subprocess
 import string
 import time
-import chip
 
 from SingleChipScriptGenerator import *
 from chip import WithTimer
+from chip import makeChipImage
 from Focalplane import *
 #import lsst.pex.policy as pexPolicy
 #import lsst.pex.logging as pexLog
@@ -307,14 +307,7 @@ class AllChipsScriptGenerator:
         """
         self.idonly = idonly
         # Build the list of cids to process
-        if idonly:
-            raftid, sid, expid = self.idonly.split("_")
-            self.cidList = ('R%s_S%s' %(raftid, sid),
-                            'CCD', 3.0)
-        else:
-            with open('lsst/focalplanelayout.txt', 'r') as fplfile:
-                self.cidList = readCidList(self.camstr, fplfile)
-
+        self.cidList = self.Focalplane.generateCidList(self.idonly)
         self._makePaths()
         return
 
@@ -849,7 +842,7 @@ class AllChipsScriptGenerator:
                         except:
                             print 'WARNING: Directory %s already exists!' %(self.scratchOutputDir)
                             pass
-                        chip.makeChipImage(self.obshistid, self.filt, cid, expid, self.scratchOutputPath)
+                        makeChipImage(self.obshistid, self.filt, cid, expid, self.scratchOutputPath)
                     else:
                         # MAKE THE SINGLE-CHIP SCRIPTS
                         print 'Making Single-Chip Scripts.'
@@ -1122,13 +1115,13 @@ class AllChipsScriptGenerator:
 
 class AllChipsScriptGenerator_Pbs(AllChipsScriptGenerator):
 
-    def __init__(self, trimfile, policy, extraidFile, idonly=""):
-        AllChipsScriptGenerator.__init__(self, trimfile, policy, extraidFile, idonly)
+    def __init__(self, trimfile, policy, extraidFile):
+        AllChipsScriptGenerator.__init__(self, trimfile, policy, extraidFile)
         self.username = self.policy.get('pbs','username')
         print 'Your PBS username is: ', self.username
         return
 
-    def _generateScripts(self):
+    def _generateScripts(self, wav):
         """Calls the proper SingleChipScriptGenerator class for each chip.
         INPUTS: wavelength returned from generateAtmosphericScreen()
         """
@@ -1139,7 +1132,7 @@ class AllChipsScriptGenerator_Pbs(AllChipsScriptGenerator):
                                                   self.filt, self.centid, self.centroidPath,
                                                   self.stagePath2, self.paramDir,
                                                   self.trackingParFile)
-        self.loopOverChips(scriptGen, wav)
+        self._loopOverChips(scriptGen, wav)
         return
 
     def _cleanupScriptFiles(self):

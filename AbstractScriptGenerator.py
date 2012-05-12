@@ -166,8 +166,8 @@ class AbstractScriptGenerator:
                 print >>cshOut, "### Remove the visit-specific directory on exec node."
                 print >>cshOut, "### (does not delete parent directories if created)"
                 print >>cshOut, "### -------------------------------------------------\n"
-                print >>cshOut, "#echo Now deleting files in %s" %(visitPath)
-                print >>cshOut, "#/bin/rm -rf %s" %(visitPath)
+                print >>cshOut, "echo Now deleting files in %s" %(visitPath)
+                print >>cshOut, "/bin/rm -rf %s" %(visitPath)
                 print >>cshOut, "echo ---"
                 print >>cshOut, "echo Job finished at `date`"
                 print >>cshOut, " "
