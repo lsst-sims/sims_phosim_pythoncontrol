@@ -275,8 +275,10 @@ class SingleChipScriptGenerator(AbstractScriptGenerator):
                 jobFile.write('time %s chip.py %s %s %s %s %s \n'
                               %(self.pythonExec, self.obshistid, self.filt, cid, expid,
                                 self.scratchOutputDir))
-                jobFile.write('time %s verifyFiles.py --stage=raytrace_exec --idlist=%s %s %s %s\n'
-                              %(self.pythonExec, id, self.obshistid, self.filter, self.scratchOutputDir))
+                cmd = '%s verifyFiles.py --stage=raytrace_exec --idlist=%s %s %s %s' \
+                      %(self.pythonExec, id, self.obshistid, self.filter, self.scratchOutputDir)
+                jobFile.write('echo Verifying output files: %s\n' %cmd)
+                jobFile.write('time %s\n' %cmd);
                 jobFile.write("if ($status) then\n")
                 jobFile.write("  echo Error in verifyFiles.py!\n")
                 jobFile.write("else\n")

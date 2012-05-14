@@ -59,7 +59,7 @@ def main(stage, obshistid, filterid, path, idList, expList, camstr):
         returncode += 2
     if len(corruptList) > 0:
         for f,e in corruptList:
-            sys.stderr.write('-- FitsFileCorrupt: %s\n' %e)
+            sys.stderr.write('-- FitsverifyFailure: %s\n' %e)
         returncode += 4
     return returncode
 
@@ -70,7 +70,7 @@ if __name__ == "__main__":
     parser = optparse.OptionParser(usage=usage)
     parser.add_option("-s", "--stage", dest="stage",
                       help="Stage to check: raytrace_input, raytrace_exec, raytrace_output (default)",
-                      default="final_output")
+                      default="raytrace_output")
     parser.add_option("-i", "--idlist", dest="idlist", default="",
                       help="(optional) comma-separated list of ids (Rxx_Sxx_Exxx) to process." +
                            "  Overrides EXPLIST.")
