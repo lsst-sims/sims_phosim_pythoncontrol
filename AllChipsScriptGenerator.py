@@ -766,12 +766,10 @@ class AllChipsScriptGenerator:
             print 'minsource', self.minsource
             if nTrimCatSources >= self.minsource:
 
-                # If useSharedSEDs is set to 'true', then we are going to read only
-                # the SEDs that we need directly from the shared storage location.
-                # So figure out which SED files are needed for this chip and store
-                # in sedlist_*.txt
-                if self.useSharedSEDs == True:
-                  self.writeSedManifest(trimCatFile, cid)
+                # Figure out which SED files are needed for this chip and store
+                # in sedlist_*.txt.  This information is useful for platforms
+                # where we stage only the needed SED files.
+                self.writeSedManifest(trimCatFile, cid)
                 # Now that we are done reading from trimCatFile, gzip it since
                 # these files get rather large
                 cmd = 'gzip %s' %trimCatFile
