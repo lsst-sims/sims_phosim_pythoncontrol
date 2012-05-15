@@ -1135,7 +1135,7 @@ class AllChipsScriptGenerator_Pbs(AllChipsScriptGenerator):
         return
 
     def _cleanupScriptFiles(self):
-        scriptListFilename = '%s_f%sJobs.lis' %(self.obshistid, self.filter)
+        scriptListFilename = generateRaytraceJobsListFilename(self.obshistid, self.filter)
         if os.path.isfile(scriptListFilename):
             os.remove(scriptListFilename)
         # Deal with the pbs and command files if created (not single chip mode).
