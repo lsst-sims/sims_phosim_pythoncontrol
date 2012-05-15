@@ -965,7 +965,7 @@ class AllChipsScriptGenerator:
               %(cid, e2adcParFile)
         subprocess.check_call(cmd, shell=True)
         with file(e2adcParFile, 'a') as parFile:
-            parFile.write('inputfilename ../cosmic_rays/output_%s_%s.fits.gz \n' %(self.obshistid, id))
+            parFile.write('inputfilename ../cosmic_rays/output_%s_%s.fits \n' %(self.obshistid, id))
             parFile.write('outputprefilename imsim_%s_ \n' % self.obshistid )
             parFile.write('outputpostfilename _%s \n' % expid) 
             parFile.write('chipid %s \n' % cid)
@@ -1062,31 +1062,37 @@ class AllChipsScriptGenerator:
         #print 'Moving FITS files to %s.' %(self.paramDir)
         print 'Deleting FITS files'
         for fits in glob.glob('*.fits'):
-          # Using copyfile instead of move will overwrite the destination if already present
-          #shutil.copy(fits, '%s' %(self.paramDir))
-          os.remove(fits)
+            # Using copyfile instead of move will overwrite the destination if already present
+            #shutil.copy(fits, '%s' %(self.paramDir))
+            os.remove(fits)
         return
 
     def _cleanupParFiles(self):
         print 'Moving .par and .par.gz files to %s.' %(self.paramDir)
         for pars in (glob.glob('*.pars')+glob.glob('*.pars.gz')):
-          shutil.copy(pars, '%s' %(self.paramDir))
-          os.remove(pars)
+            shutil.copy(pars, '%s' %(self.paramDir))
+            os.remove(pars)
         return
 
     def _cleanupSedFiles(self):
         print 'Moving sedlist_*.txt files to %s.' %(self.paramDir)
         for seds in glob.glob('sedlist_*.txt'):
-          shutil.copy(seds, '%s' %(self.paramDir))
-          os.remove(seds)
+            shutil.copy(seds, '%s' %(self.paramDir))
+            os.remove(seds)
         return
 
     def _cleanupScriptFiles(self):
+        scriptListFilename = generateRaytraceJobsListFilename(self.obshistid, self.filter)
+        if os.path.isfile(scriptListFilename):
+            os.remove(scriptListFilename)
         # Deal with the script and command files if created (not single chip mode).
         print 'Moving shell script files to', self.paramDir
-        for pbs in glob.glob('exec_%s_*.csh' %(self.obshistid)):
-            shutil.copy(pbs, '%s' %(self.paramDir))
-            os.remove(pbs)
+        print 'And generating list of scripts in', scriptListFilename
+        with open(scriptListFilename, 'w') as scriptList:
+            for exec_filename in sorted(glob.glob('exec_%s_*.csh' %(self.obshistid))):
+                shutil.copy(exec_filename, '%s' %(self.paramDir))
+                os.remove(exec_filename)
+                scriptList.write('csh %s\n' %os.path.join(self.paramDir, exec_filename))
 
         try:
             for cmds in glob.glob('cmds_*.txt'):
@@ -1094,19 +1100,14 @@ class AllChipsScriptGenerator:
         except:
             print 'WARNING: No command files to remove!'
             pass
-
-        scriptListFilename = '%s_f%sJobs.lis' %(self.obshistid, self.filter)
-        if os.path.isfile(scriptListFilename):
-            os.remove(scriptListFilename)
-
-        try:
-            cmd = 'ls %s/*.csh > %s' %(self.paramDir, scriptListFilename)
-            subprocess.check_call(cmd,shell=True)
-            print 'Created qsub list.'
-            print 'Finished tarring and moving files.  Ready to launch per-chip scripts.'
-        except:
-            print 'WARNING: No shell script files to list!'
-            pass
+        #try:
+        #    cmd = 'ls %s/*.csh > %s' %(self.paramDir, scriptListFilename)
+        #    subprocess.check_call(cmd,shell=True)
+        #    print 'Created qsub list.'
+        #    print 'Finished tarring and moving files.  Ready to launch per-chip scripts.'
+        #except:
+        #    print 'WARNING: No shell script files to list!'
+        #    pass
         return
 
 
@@ -1134,10 +1135,16 @@ class AllChipsScriptGenerator_Pbs(AllChipsScriptGenerator):
         return
 
     def _cleanupScriptFiles(self):
+        scriptListFilename = '%s_f%sJobs.lis' %(self.obshistid, self.filter)
+        if os.path.isfile(scriptListFilename):
+            os.remove(scriptListFilename)
         # Deal with the pbs and command files if created (not single chip mode).
         print 'Moving PBS script files to', self.paramDir
-        for pbs in glob.glob('exec_%s_*.pbs' %(self.obshistid)):
-            shutil.move(pbs, '%s' %(self.paramDir))
+        with open(scriptListFilename, 'w') as scriptList:
+            for pbs in sorted(glob.glob('exec_%s_*.pbs' %(self.obshistid))):
+                shutil.copy(pbs, '%s' %(self.paramDir))
+                os.remove(pbs)
+                scriptList.write('qsub %s\n' %os.path.join(self.paramDir, pbs))
 
         try:
             for cmds in glob.glob('cmds_*.txt'):
@@ -1147,13 +1154,10 @@ class AllChipsScriptGenerator_Pbs(AllChipsScriptGenerator):
             print 'WARNING: No command files to remove!'
             pass
 
-        scriptListFilename = '%s_f%sJobs.lis' %(self.obshistid, self.filter)
-        if os.path.isfile(scriptListFilename):
-            os.remove(scriptListFilename)
-        try:
-            cmd = 'ls %s/*.pbs > %s' %(self.paramDir, scriptListFilename)
-            subprocess.check_call(cmd,shell=True)
-            print 'Created qsub list.'
-            print 'Finished tarring and moving files.  Ready to launch PBS scripts.'
-        except:
-            raise RuntimeError,  'WARNING: No PBS files to list!'
+        #try:
+        #    cmd = 'ls %s/*.pbs > %s' %(self.paramDir, scriptListFilename)
+        #    subprocess.check_call(cmd,shell=True)
+        #    print 'Created qsub list.'
+        #    print 'Finished tarring and moving files.  Ready to launch PBS scripts.'
+        #except:
+        #    raise RuntimeError,  'WARNING: No PBS files to list!'

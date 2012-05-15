@@ -20,6 +20,7 @@ import ConfigParser
 import getpass   # for getting username
 import datetime
 from AbstractScriptGenerator import *
+from Focalplane import generateRaytraceJobsListFilename
 
 
 class SingleVisitScriptGenerator(AbstractScriptGenerator):
@@ -96,7 +97,7 @@ class SingleVisitScriptGenerator(AbstractScriptGenerator):
         return '%s_f%s.csh' %(obshistid, filt)
 
     def makeScript(self, obsHistID, origObsHistID, trimfileName, trimfileBasename, trimfilePath,
-                   filt, filter, visitDir, visitLogPath):
+                   filterName, filterNum, visitDir, visitLogPath):
         """
         This creates a script to do the pre-processing for each visit.
 
@@ -119,28 +120,28 @@ class SingleVisitScriptGenerator(AbstractScriptGenerator):
         objhistid + filter
 
         """
-        scriptFileName = os.path.join(self.tmpdir, self.jobFileName(obsHistID, filt))
+        scriptFileName = os.path.join(self.tmpdir, self.jobFileName(obsHistID, filterName))
         print 'scriptFileName:', scriptFileName
         if os.path.isfile(scriptFileName):
             os.remove(scriptFileName)
 
 
-        self.writeHeader(scriptFileName, visitDir, filter, obsHistID, visitLogPath)
+        self.writeHeader(scriptFileName, visitDir, filterName, obsHistID, visitLogPath)
         self.writeSetupExecDirs(scriptFileName, visitDir)
         self.writeCopySharedData(scriptFileName, visitDir)
         self.writeCopyStagedFiles(scriptFileName, trimfileName, trimfileBasename, trimfilePath,
-                              filt, filter, obsHistID, origObsHistID, visitDir)
+                              filterName, filterNum, obsHistID, origObsHistID, visitDir)
         self.writeJobCommands(scriptFileName, trimfileName, trimfileBasename, trimfilePath,
-                              filt, filter, obsHistID, origObsHistID, visitDir)
+                              filterName, filterNum, obsHistID, origObsHistID, visitDir)
         self.writeCleanupCommands(scriptFileName, visitDir)
 
         self.stageFiles(trimfileName, trimfileBasename, trimfilePath,
-                        filt, filter, obsHistID, origObsHistID,
+                        filterName, filterNum, obsHistID, origObsHistID,
                         scriptFileName, self.scriptOutList, visitDir,
                         visitLogPath)
 
 
-    def writeHeader(self, scriptFileName, visitDir, filter, obsHistID, visitLogPath):
+    def writeHeader(self, scriptFileName, visitDir, filterName, obsHistID, visitLogPath):
         username = getpass.getuser()
         sDate = str(datetime.datetime.now())
         try:
@@ -166,7 +167,7 @@ class SingleVisitScriptGenerator(AbstractScriptGenerator):
         return
 
     def writeCopyStagedFiles(self, scriptFileName, trimfileName, trimfileBasename, trimfilePath,
-                             filt, filter, obshistid, origObshistid, visitDir):
+                             filterName, filterNum, obshistid, origObshistid, visitDir):
 
         """
         Write the commands to copy staged files to the exec node
@@ -224,7 +225,7 @@ class SingleVisitScriptGenerator(AbstractScriptGenerator):
         return
 
     def writeJobCommands(self, scriptFileName, trimfileName, trimfileBasename, trimfilePath,
-                         filt, filter, obshistid, origObshistid, visitDir):
+                         filterName, filterNum, obshistid, origObshistid, visitDir):
 
         """
         Add the actual job commands.
@@ -245,21 +246,18 @@ class SingleVisitScriptGenerator(AbstractScriptGenerator):
                 cshOut.write('which %s\n' %(self.pythonExec))
                 cshOut.write("time %s fullFocalplane.py %s %s %s\n"
                              %(self.pythonExec, trimfileBasename, self.imsimConfigFile, self.extraIdFile))
-                cmd = '%s verifyFiles.py --stage=raytrace_input %s %s %s' \
-                      %(self.pythonExec, obshistid, filt, self.stagePath2)
+                cmd = '%s verifyFiles.py --stage=raytrace_input --output=verify.out %s %s %s' \
+                      %(self.pythonExec, obshistid, filterName, self.stagePath2)
                 cshOut.write('echo Verifying output files: %s\n' %cmd)
                 cshOut.write("time %s\n" %cmd)
-                #cshOut.write('rm %s/%s_f%sJobs.lis \n'%(self.stagePath2, obshistid, filt))
+                jobsListFilename = generateRaytraceJobsListFilename(obshistid, filterName)
                 cshOut.write("if ($status) then\n")
                 cshOut.write("  echo Error in verifyFiles.py!\n")
+                cshOut.write("  cp verify.out %s\n" %os.path.join(self.stagePath2, jobsListFilename))
                 cshOut.write("else\n")
                 cshOut.write("  echo Output file verification completed with no errors.\n")
-                cshOut.write('  cp %s_f%sJobs.lis %s \n'%(obshistid, filt, self.stagePath2))
+                cshOut.write('  cp %s %s \n'%(jobsListFilename, self.stagePath2))
                 cshOut.write("endif\n")
-
-                #for lines in jobinput:
-                #    print >>pbsout, "%s" %(lines)
-                #jobinput.close()
         except IOError:
             print "Could not open %s for writing jobCommands for PBS script" %(scriptFileName)
             sys.exit()
@@ -271,7 +269,7 @@ class SingleVisitScriptGenerator(AbstractScriptGenerator):
       return
 
     def stageFiles(self, trimfileAbsName, trimfileBasename, trimfilePath,
-                   filt, filter, obshistid, origObshistid,
+                   filterName, filterNum, obshistid, origObshistid,
                    scriptFileName, scriptOutList, visitDir, visitLogPath):
         stagePath = self.stagePath
         # We should be in the script's invocation directory
@@ -350,10 +348,10 @@ class SingleVisitScriptGenerator_Pbs(SingleVisitScriptGenerator):
         self.jobname =    self.policy.get('general', 'jobname')
         return
 
-    def jobFileName(self, obshistid, filt):
-        return '%s_f%s.pbs' %(obshistid, filt)
+    def jobFileName(self, obshistid, filterName):
+        return '%s_f%s.pbs' %(obshistid, filterName)
 
-    def writeHeader(self, scriptFileName, visitDir, filter, obshistid, visitLogPath):
+    def writeHeader(self, scriptFileName, visitDir, filterName, obshistid, visitLogPath):
 
         """
         Write PBS-specific header information.
@@ -378,11 +376,8 @@ class SingleVisitScriptGenerator_Pbs(SingleVisitScriptGenerator):
         else:
             queue = '-q %s' %(queueTmp)
 
-
-        filt = self.filtmap[filter]
-
-        filename = '%s_f%s' %(obshistid, filt)
-        paramdir = '%s-f%s' %(obshistid, filt)
+        filename = '%s_f%s' %(obshistid, filterName)
+        paramdir = '%s-f%s' %(obshistid, filterName)
         savePath = os.path.join(saveDir, paramdir)
 
         try:

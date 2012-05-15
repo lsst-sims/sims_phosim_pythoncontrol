@@ -32,6 +32,11 @@ import getpass   # for getting username
 import chip
 from AbstractScriptGenerator import *
 
+def generateVerifyErrorFilename(id):
+  return '%s.verify_error' %id
+
+def generateVerifyFilename(id):
+  return '%s.verified' %id
 
 class SingleChipScriptGenerator(AbstractScriptGenerator):
     """
@@ -44,15 +49,15 @@ class SingleChipScriptGenerator(AbstractScriptGenerator):
     in the visit.
 
     """
-    def __init__(self, policy, obshistid, filter, filt, centid, centroidPath,
+    def __init__(self, policy, obshistid, filterName, filterNum, centid, centroidPath,
                  stagePath2, paramDir, trackingParFile):
         """Constructor.
       
         Args:
         policy:      parser object for ImSim config file
         obshistid:   obshistid (includes extraid)
-        filter:      letter filter ID
-        filt:        numerical filter ID
+        filterName:      letter filter ID
+        filterNum:   numerical filter ID
         centid:      not really sure (JPG)
         centroidPath not really sure, either (JPG)
         stagePath2   In case this is doctored from the ImSim config file
@@ -62,8 +67,8 @@ class SingleChipScriptGenerator(AbstractScriptGenerator):
 
         self.policy = policy
         self.obshistid = obshistid
-        self.filter = filter
-        self.filt = filt
+        self.filterName = filterName
+        self.filterNum = filterNum
         self.centid = centid
         self.centroidPath = centroidPath
         self.stagePath2 = stagePath2
@@ -136,14 +141,14 @@ class SingleChipScriptGenerator(AbstractScriptGenerator):
         To prevent conflicts between parallel workunits, the files needed for
         each work unit are packaged in scratchPath/wuID where 'wuID' is the
         work unit ID and is constructed as:
-               wuID = '%s-f%s-%s' %(self.obshistid, self.filter, id)
+               wuID = '%s-f%s-%s' %(self.obshistid, self.filterName, id)
         where 'id' is of the form:
                id = 'R'+rx+ry+'_'+'S'+sx+sy+'_'+'E00'+ex
 
         """
 
         id = '%s_%s' %(cid, expid)
-        wuID = '%s-f%s-%s' %(self.obshistid, self.filter, id)
+        wuID = '%s-f%s-%s' %(self.obshistid, self.filterName, id)
         jobFileName = self.getJobFileName(id)
 
         self.writeHeader(jobFileName, wuID, cid, expid, visitLogPath)
@@ -152,7 +157,7 @@ class SingleChipScriptGenerator(AbstractScriptGenerator):
         self.writeCopyStagedFiles(jobFileName, wuID, cid, expid, raytraceParFile,
                                  backgroundParFile, cosmicParFile, trimcatalogParFile)
         self.writeJobCommands(jobFileName, wuID, cid, id, expid)
-        self.writeSaveOutputCommands(jobFileName, wuID, cid, expid)
+        self.writeSaveOutputCommands(jobFileName, wuID, cid, expid, visitLogPath)
         self.writeCleanupCommands(jobFileName, wuID, cid, expid)
 
         print "Created Job file %s" %(jobFileName)
@@ -271,18 +276,22 @@ class SingleChipScriptGenerator(AbstractScriptGenerator):
                 print >>jobFile, " "
                 jobFile.write('cd %s \n' %(wuPath))
                 jobFile.write('echo Running: chip.py %s %s %s %s %s \n'
-                              %(self.obshistid, self.filt, cid, expid, self.scratchOutputDir))
+                              %(self.obshistid, self.filterNum, cid, expid, self.scratchOutputDir))
                 jobFile.write('time %s chip.py %s %s %s %s %s \n'
-                              %(self.pythonExec, self.obshistid, self.filt, cid, expid,
+                              %(self.pythonExec, self.obshistid, self.filterNum, cid, expid,
                                 self.scratchOutputDir))
-                cmd = '%s verifyFiles.py --stage=raytrace_exec --idlist=%s %s %s %s' \
-                      %(self.pythonExec, id, self.obshistid, self.filter, self.scratchOutputDir)
+                fnError = generateVerifyErrorFilename(id)
+                fnVerified = generateVerifyFilename(id)
+                cmd = '%s verifyFiles.py --stage=raytrace_exec --output=%s --idlist=%s %s %s %s' \
+                      %(self.pythonExec, fnError, id, self.obshistid,
+                        self.filterName, self.scratchOutputDir)
                 jobFile.write('echo Verifying output files: %s\n' %cmd)
                 jobFile.write('time %s\n' %cmd);
                 jobFile.write("if ($status) then\n")
-                jobFile.write("  echo Error in verifyFiles.py!\n")
+                jobFile.write("  echo Error in verifyFiles.py!  Output written to %s\n" % fnError)
                 jobFile.write("else\n")
                 jobFile.write("  echo Output files successfully verified.\n")
+                jobFile.write("  touch %s\n" %fnVerified)
                 jobFile.write("endif\n")
                 if self.centid == '1':
                     jobFile.write('echo Copying centroid file to %s \n' %(self.centroidPath))
@@ -294,7 +303,7 @@ class SingleChipScriptGenerator(AbstractScriptGenerator):
         return
 
 
-    def writeSaveOutputCommands(self, jobFileName, wuID, cid, expid):
+    def writeSaveOutputCommands(self, jobFileName, wuID, cid, expid, visitLogPath):
 
         """
 
@@ -322,27 +331,33 @@ class SingleChipScriptGenerator(AbstractScriptGenerator):
         print >>jobOut, "### MOVE the image files to shared directory"
         print >>jobOut, "### ---------------------------------------"
 
-        eimage = 'eimage_%s_f%s_%s.fits.gz' %(self.obshistid, self.filt, id)
+        eimage = 'eimage_%s_f%s_%s.fits.gz' %(self.obshistid, self.filterNum, id)
         baseName = 'eimage'
-        print >>jobOut, "echo scratchPath: %s  wuID: %s  scratchOutputDir: %s" %(self.scratchPath, wuID, self.scratchOutputDir)
-        print >>jobOut, "echo Now moving %s/%s" %(scratchOutputPath, eimage)
-        #print >>jobOut, "echo calling python pbs/distributeFiles.py %s %s/%s/%s/%s %s" %(transferPath, scratchpartition, nodedir, nodeDatadir, eimage, baseName)
-        #print >>jobOut, "python pbs/distributeFiles.py %s %s/%s/%s/%s %s" %(transferPath, scratchpartition, nodedir, nodeDatadir, eimage, baseName)
-        print >>jobOut, "echo calling %s pbs/distributeFiles.py %s %s/%s %s" %(self.pythonExec, self.savePath,
+        fnVerified = generateVerifyFilename(id)
+        jobOut.write("if ( -e %s) then\n" %fnVerified)
+        jobOut.write("  cp %s %s\n" %(fnVerified, visitLogPath))
+        print >>jobOut, "  echo scratchPath: %s  wuID: %s  scratchOutputDir: %s" %(self.scratchPath, wuID, self.scratchOutputDir)
+        print >>jobOut, "  echo Now moving %s/%s" %(scratchOutputPath, eimage)
+        #print >>jobOut, "  echo calling python pbs/distributeFiles.py %s %s/%s/%s/%s %s" %(transferPath, scratchpartition, nodedir, nodeDatadir, eimage, baseName)
+        #print >>jobOut, "  python pbs/distributeFiles.py %s %s/%s/%s/%s %s" %(transferPath, scratchpartition, nodedir, nodeDatadir, eimage, baseName)
+        print >>jobOut, "  echo calling %s pbs/distributeFiles.py %s %s/%s %s" %(self.pythonExec, self.savePath,
                                                                                scratchOutputPath, eimage, baseName)
-        print >>jobOut, "%s pbs/distributeFiles.py %s %s/%s %s" %(self.pythonExec, self.savePath,
+        print >>jobOut, "  %s pbs/distributeFiles.py %s %s/%s %s" %(self.pythonExec, self.savePath,
                                                                   scratchOutputPath, eimage, baseName)
 
         with open('lsst/segmentation.txt', 'r') as ampFile:
           ampList = chip.readAmpList(ampFile, cid)
         for ampid in ampList:
-            image = 'imsim_%s_f%s_%s_%s.fits.gz' %(self.obshistid, self.filt, ampid, expid)
+            image = 'imsim_%s_f%s_%s_%s.fits.gz' %(self.obshistid, self.filterNum, ampid, expid)
             baseName = 'imsim'
-            print >>jobOut, "echo Now moving %s/%s" %(scratchOutputPath, image)
-            print >>jobOut, "echo calling %s pbs/distributeFiles.py %s %s/%s %s" %(self.pythonExec, self.savePath, scratchOutputPath, image, baseName)
-            print >>jobOut, "%s pbs/distributeFiles.py %s %s/%s %s" %(self.pythonExec, self.savePath, scratchOutputPath, image, baseName)
+            print >>jobOut, "  echo Now moving %s/%s" %(scratchOutputPath, image)
+            print >>jobOut, "  echo calling %s pbs/distributeFiles.py %s %s/%s %s" %(self.pythonExec, self.savePath, scratchOutputPath, image, baseName)
+            print >>jobOut, "  %s pbs/distributeFiles.py %s %s/%s %s" %(self.pythonExec, self.savePath, scratchOutputPath, image, baseName)
 
-        print >>jobOut, "echo Moved %s files to %s/" %(self.obshistid, self.savePath)
+        print >>jobOut, "  echo Moved %s files to %s/" %(self.obshistid, self.savePath)
+        jobOut.write("else\n")
+        jobOut.write("  cp %s %s\n" %(generateVerifyErrorFilename(id), visitLogPath))
+        jobOut.write("endif\n")
         jobOut.close()
         return
 
@@ -388,9 +403,9 @@ class SingleChipScriptGenerator_Pbs(SingleChipScriptGenerator):
     master class.
     """
 
-    def __init__(self, policy, obshistid, filter, filt, centid, centroidPath,
+    def __init__(self, policy, obshistid, filterName, filterNum, centid, centroidPath,
                  stagePath2, paramDir, trackingParFile):
-        SingleChipScriptGenerator.__init__(self, policy, obshistid, filter, filt,
+        SingleChipScriptGenerator.__init__(self, policy, obshistid, filterName, filterNum,
                                            centid, centroidPath, stagePath2,
                                            paramDir, trackingParFile)
 
@@ -476,7 +491,7 @@ class SingleChipScriptGenerator_Pbs(SingleChipScriptGenerator):
         pbslogfilename = '%s.out' % wuID
 
         sDate = str(datetime.datetime.now())
-        paramdir = '%s-f%s' %(self.obshistid, self.filter)
+        paramdir = '%s-f%s' %(self.obshistid, self.filterName)
         visitPath = os.path.join(self.savePath, paramdir)
 
         if os.path.isfile(pbsfilename):

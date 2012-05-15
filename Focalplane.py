@@ -7,6 +7,7 @@ from __future__ import with_statement
 import os, re, sys
 import chip
 from Exposure import verifyFileExistence
+from Exposure import idStringsFromFilename
 
 def readCidList(camstr, fplFile):
     """Search the focalplanelayout file for lines in fplFile matching
@@ -20,6 +21,9 @@ def readCidList(camstr, fplFile):
             c = line.split()
             cidList.append( (c[0],c[6],float(c[7])) )
     return cidList
+
+def generateRaytraceJobsListFilename(obshistid, filter):
+  return '%s-f%s-Jobs.lis' %(obshistid, filter)
 
 class ParsFilenames(object):
     """
@@ -155,28 +159,29 @@ class Focalplane(object):
             verifyFileExistence(missingList, paramPath, pfn.trimcatalog(id))
         return missingList
 
-    def idListFromExecFiles(self, paramPath, in_exp_list):
+    def idListFromExecFiles(self, paramPath, in_id_list):
         """
         Generates a list of exposure IDs for each exec_* file in
         stagePath2. If the input _exp_list is not empty,
         it will restrict this search to just those exposure IDs given
-        in in_exp_list.
+        in in_id_list.
         """
-        exec_list = os.listdir(paramPath)
-        exp_list = []
-        for exec_filename in exec_list:
-            e = exec_filename.split('_')
-            if e[0] != 'exec' or e[1] != self.obshistid:
+        all_files = os.listdir(paramPath)
+        id_list = []
+        for filename in all_files:
+            if filename.split("_")[0] != 'exec':
                 continue
-            expid = '%s_%s_%s' %(e[2], e[3], e[4].split('.')[0])
-            if in_exp_list:
-                # Check if this is an element in in_exp_list.
+            obshistid, id = idStringsFromFilename(filename)
+            if obshistid != self.obshistid:
+                continue
+            if in_id_list:
+                # Check if this is an element in in_id_list.
                 # TODO(gardnerj) make this search more efficient someday.
-                for i in in_exp_list:
-                    if expid == i:
-                        exp_list.append(expid)
+                for i in in_id_list:
+                    if id == i:
+                        id_list.append(id)
             else:
-                exp_list.append(expid)
-        return exp_list
+                id_list.append(id)
+        return id_list
 
     

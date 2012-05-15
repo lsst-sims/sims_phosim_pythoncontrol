@@ -21,6 +21,7 @@ import ConfigParser
 import getpass   # for getting username
 import datetime
 from SingleVisitScriptGenerator import *
+from Exposure import filterToLetter, filterToNumber
 
 class AllVisitsScriptGenerator:
     """
@@ -47,9 +48,6 @@ class AllVisitsScriptGenerator:
         self.scriptInvocationPath = os.getcwd()
         self._loadEnvironmentVars()
         self.imsimConfigFile = imsimConfigFile
-
-        # map filter number to filter character
-        self.filtmap = {"0":"u", "1":"g", "2":"r", "3":"i", "4":"z", "5":"y"}
 
         #policy   = pexPolicy.Policy.createPolicy(imsimPolicy)
         # Job params
@@ -151,8 +149,8 @@ class AllVisitsScriptGenerator:
 
         for line in open(trimfileName).readlines():
             if line.startswith('Opsim_filter'):
-                name, filter = line.split()
-                print 'Opsim_filter:', filter
+                name, filterNum = line.split()
+                print 'Opsim_filter:', filterNum
             if line.startswith('Opsim_obshistid'):
                 name, obshistid = line.split()
                 print 'Opsim_obshistid:', obshistid
@@ -167,8 +165,8 @@ class AllVisitsScriptGenerator:
         obshistid = obshistid + self.extraid
 
         # Create SAVE & LOG DIRECTORIES for this visit
-        filt = self.filtmap[filter]
-        visitDir = '%s-f%s' %(obshistid, filt)
+        filterName = filterToLetter(filterNum)
+        visitDir = '%s-f%s' %(obshistid, filterName)
         visitSavePath = os.path.join(self.stagePath2, visitDir)
         visitLogPath = os.path.join(self.savePath, visitDir, 'logs')
         visitParamDir = 'run%s' %(obshistid)  # Subdirectory within visitSavePath to store param files
@@ -176,8 +174,8 @@ class AllVisitsScriptGenerator:
 
         self.checkVisitDirectories(visitSavePath, visitLogPath, visitParamDir, trimfileStagePath)
         scriptGen.makeScript(obshistid, origObshistid, trimfileName, trimfileBasename,
-                             trimfilePath, filt, filter, visitDir, visitLogPath)
-        #self.scriptWriter(trimfileName, trimfileBasename, trimfilePath, filt, filter, obshistid, origObshistid)
+                             trimfilePath, filterName, filterNum, visitDir, visitLogPath)
+        #self.scriptWriter(trimfileName, trimfileBasename, trimfilePath, filterName, filterNum, obshistid, origObshistid)
         return visitDir
 
     def checkDirectories(self):
@@ -300,39 +298,6 @@ class AllVisitsScriptGenerator:
         return
 
 
-
-    def scriptWriterOLD(self, trimfileName, trimfileBasename, trimfilePath,
-                     filt, filter, obshistid, origObshistid):
-        """
-        This is called by makeScripts() and actually generates the script
-        text for each trimfile.
-        As part of the AllVisitsScriptGenerator class, this writes a generic
-        shell script.  Subclasses for PBS or Exacycle can redefine this
-        method for their own specific implementations.
-        """
-
-        # visitDir is the directory within scratchPath that contains info for the particular objhistid + filter
-        visitDir = '%s-f%s' %(obshistid, filter)
-
-
-        # Make the csh script for this visit
-        scriptFileName = '%s_f%s.csh' %(obshistid, filt)
-        scriptGen = SingleVisitScriptGenerator(self.scriptInvocationPath, scriptFileName,
-                                               self.policy, obshistid)
-        scriptGen.writeSetupCommands(self.stagePath, visitDir)
-        scriptGen.writeJobCommands(trimfileName, trimfileBasename, trimfilePath,
-                                  filt, filter, obshistid, origObshistid, self.stagePath, self.extraIdFile,
-                                  self.imsimConfigFile, visitDir, self.execFileTgzName)
-        scriptGen.writeCleanupCommands(visitDir)
-
-        visitFileTgz = scriptGen.tarVisitFiles(obshistid, filt, self.imsimConfigFile, self.extraIdFile)
-        scriptOutList = 'genFilesToRun_%s.lis' %(self.extraIdFile)
-        scriptGen.stageFiles(trimfileName, trimfileBasename, trimfilePath,
-                             filt, filter, obshistid, origObshistid, self.stagePath,
-                             self.execFileTgzName,
-                             visitFileTgz, scriptFileName, scriptOutList, visitDir)
-
-
 class AllVisitsScriptGenerator_Pbs(AllVisitsScriptGenerator):
     """
     This class redefines scriptWriter() for PBS.
@@ -379,36 +344,4 @@ class AllVisitsScriptGenerator_Pbs(AllVisitsScriptGenerator):
         for trimfileName in self.trimfileList:
             trimfileName = trimfileName.strip()
             visitDirList.append(self.processTrimFile(scriptGen, trimfileName))
-        return
-
-
-    def scriptWriterOLD(self, trimfileName, trimfileBasename, trimfilePath,
-                     filt, filter, obshistid, origObshistid):
-
-        # Make the PBS file for this visit
-        pbsFileName = '%s_f%s.pbs' %(obshistid, filt)
-        # visitDir is the directory that contains info for the particular objhistid + filter
-        visitDir = '%s-f%s' %(obshistid, filter)
-
-        pbsGen = SingleVisitPbsGenerator(self.scriptInvocationPath, pbsFileName, self.policy, obshistid)
-        pbsGen.header(filter)
-        pbsGen.logging(visitDir)
-        pbsGen.setupCleanup(visitDir)
-        pbsGen.writeJobCommands(trimfileName, trimfileBasename, trimfilePath,
-                               filt, filter, obshistid, origObshistid, self.stagePath, self.extraIdFile,
-                               self.imsimConfigFile, visitDir, self.execFileTgzName)
-        pbsGen.cleanNodeDir(visitDir)
-        print "Created PBS file %s" %(pbsFileName)
-
-
-        visitFileTgz = pbsGen.tarVisitFiles(obshistid, filt, self.imsimConfigFile, self.extraIdFile)
-        # Remove the command file.
-        #print 'Removing %s.' %(myCmdFile)
-        #os.remove(myCmdFile)
-        pbsOutList = 'genFilesToSubmit_%s.lis' %(self.extraIdFile)
-        pbsGen.stageFiles(trimfileName, trimfileBasename, trimfilePath,
-                          filt, filter, obshistid, origObshistid, self.stagePath,
-                          self.execFileTgzName,
-                          visitFileTgz, pbsFileName, pbsOutList, visitDir)
-
         return

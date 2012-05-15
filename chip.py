@@ -167,14 +167,15 @@ def makeChipImage(obshistid, filter, cid, expid, datadir):
     t.PrintWall('create_rays', sys.stderr)
     os.remove('../Add_Background/fits_files/%s' %(image))
 
-    sys.stderr.write('gzipping %s\n' %outputFile)
-    with WithTimer() as t:
-        f_in = open(outputFile, 'rb')
-        f_out = gzip.open('%s.gz' %(outputFile), 'wb')
-        f_out.writelines(f_in)
-        f_out.close()
-        f_in.close()
-    t.PrintWall('gzip_%s'%outputFile, sys.stderr)
+    #sys.stderr.write('gzipping %s\n' %outputFile)
+    # outputFile is needed in gzipped form by e2adc
+    #with WithTimer() as t:
+    #    f_in = open(outputFile, 'rb')
+    #    f_out = gzip.open('%s.gz' %(outputFile), 'wb')
+    #    f_out.writelines(f_in)
+    #    f_out.close()
+    #    f_in.close()
+    #t.PrintWall('gzip_%s'%outputFile, sys.stderr)
 
     os.chdir('../..')
 
@@ -204,7 +205,7 @@ def makeChipImage(obshistid, filter, cid, expid, datadir):
       
 ##     os.remove('%s' %(trimCatFile))
     os.remove('ancillary/cosmic_rays/%s' %(outputFile))            
-    os.remove('ancillary/cosmic_rays/%s.gz' %(outputFile))
+    #os.remove('ancillary/cosmic_rays/%s.gz' %(outputFile))
 ##     os.remove('chip_%s_%s.pars' %(obshistid, id))
 ##     os.remove('%s' %(cosmicParFile))
 ##     os.remove('%s' %(backgroundParFile))

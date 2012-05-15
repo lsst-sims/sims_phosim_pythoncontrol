@@ -36,13 +36,34 @@ def verifyFitsContents(corruptList, path, filename):
     corruptList.append((fullpath, output))
     return False
 
+def filterToLetter(filterIdNum):
+  filtmapToLetter = {"0":"u", "1":"g", "2":"r", "3":"i", "4":"z", "5":"y"}
+  return filtmapToLetter[filterIdNum]
+
+def filterToNumber(filterIdName):
+  filtmapToNumber = {"u":"0", "g":"1", "r":"2", "i":"3", "z":"4", "y":"5"}
+  return filtmapToNumber[filterIdName]
+
+def idStringsFromFilename(filename):
+  """Returns the obshistid and the full exposure id of any file with a name structured
+  as: name_<obshistid>_<rafid>_<sourceid>_<expid>.extension
+  INPUT:
+      filename:   Name of the file to parse
+  RETURNS:
+      obshistid:  obshistid
+      id:         full exposure id of the form <raftid>_<sourceid>_<expid>
+  """
+  tokens = filename.split('_')
+  assert len(tokens) == 5
+  obshistid = tokens[1]
+  id = '%s_%s_%s' %(tokens[2], tokens[3], tokens[4].split('.')[0])
+  return obshistid, id
+
 class Exposure(object):
     def __init__(self, obshistid, filterid, id):
-        self.filtmapToLetter = {"0":"u", "1":"g", "2":"r", "3":"i", "4":"z", "5":"y"}
-        self.filtmapToNumber = {"u":"0", "g":"1", "r":"2", "i":"3", "z":"4", "y":"5"}
         self.obshistid = obshistid
         self.filterName = filterid
-        self.filterNum = self.filtmapToNumber[self.filterName]
+        self.filterNum = filterToNumber(self.filterName)
         self.id = id
         self.raftid, self.sensorid, self.expid = self.id.split("_")
         self.cid = "%s_%s" %(self.raftid, self.sensorid)
