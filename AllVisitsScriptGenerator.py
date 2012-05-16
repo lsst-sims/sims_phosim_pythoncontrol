@@ -111,10 +111,8 @@ class AllVisitsScriptGenerator:
         in the trimfile and then calls scriptGen.makeScript() to generate the actual
         script.
         """
-        self.checkDirectories()
-
-        # Remove the file containing the script names if it exists.
-        scriptOutList = 'visitScriptsToRun_%s.lis' %(os.path.basename(self.extraIdFile))
+        preprocScriptManifest = os.path.join(self.stagePath, 'preprocessingJobs.lis')
+        self.checkDirectories(preprocScriptManifest)
 
         # Note that tarExecFiles() needs to be called before initializing
         # SingleVisitScriptGenerator because it defines self.execFileTgzName
@@ -124,7 +122,7 @@ class AllVisitsScriptGenerator:
         self.tarControlFiles()
         # SingleVisitScriptGenerator can be instantiated only once per execution environment,
         # So initialize it here, then call the makeScript() in the loop over trim files.
-        scriptGen = SingleVisitScriptGenerator(self.scriptInvocationPath, scriptOutList, self.policy,
+        scriptGen = SingleVisitScriptGenerator(self.scriptInvocationPath, preprocScriptManifest, self.policy,
                                                self.imsimConfigFile, self.extraIdFile,
                                                self.sourceFileTgzName, self.execFileTgzName,
                                                self.controlFileTgzName, self.tmpdir)
@@ -178,7 +176,7 @@ class AllVisitsScriptGenerator:
         #self.scriptWriter(trimfileName, trimfileBasename, trimfilePath, filterName, filterNum, obshistid, origObshistid)
         return visitDir
 
-    def checkDirectories(self):
+    def checkDirectories(self, preprocScriptManifest):
         # Checks directories accessible from the client that are used for all visits
         stagePath = self.stagePath
         # Creat stagePath if it does not exist
@@ -188,6 +186,9 @@ class AllVisitsScriptGenerator:
                 os.makedirs(stagePath)
             except OSError:
                 print OSError
+        # Remove the file containing the script names if it exists.
+        if os.path.isfile(preprocScriptManifest):
+          os.remove(preprocScriptManifest)
         # Now create trimfiles staging directory, too
         trimfileStagePath = os.path.join(stagePath, 'trimfiles')
         if not os.path.isdir(trimfileStagePath):
@@ -321,10 +322,8 @@ class AllVisitsScriptGenerator_Pbs(AllVisitsScriptGenerator):
         in the trimfile and then calls scriptGen.makeScript() to generate the actual
         script.
         """
-        self.checkDirectories()
-
-        # Remove the file containing the script names if it exists.
-        scriptOutList = 'visitScriptsToRun_%s.lis' %(self.extraIdFile)
+        preprocScriptManifest = os.path.join(self.stagePath, 'preprocessingJobs.lis')
+        self.checkDirectories(preprocScriptManifest)
 
         # Note that tarExecFiles() needs to be called before initializing
         # SingleVisitScriptGenerator because it defines self.execFileTgzName
@@ -334,7 +333,7 @@ class AllVisitsScriptGenerator_Pbs(AllVisitsScriptGenerator):
         self.tarControlFiles()
         # SingleVisitScriptGenerator can be instantiated only once per execution environment,
         # So initialize it here, then call the makeScript() in the loop over trim files.
-        scriptGen = SingleVisitScriptGenerator_Pbs(self.scriptInvocationPath, scriptOutList,
+        scriptGen = SingleVisitScriptGenerator_Pbs(self.scriptInvocationPath, preprocScriptManifest,
                                                    self.policy, self.imsimConfigFile,
                                                    self.extraIdFile, self.sourceFileTgzName,
                                                    self.execFileTgzName, self.controlFileTgzName,

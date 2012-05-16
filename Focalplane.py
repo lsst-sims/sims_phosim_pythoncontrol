@@ -22,7 +22,7 @@ def readCidList(camstr, fplFile):
             cidList.append( (c[0],c[6],float(c[7])) )
     return cidList
 
-def generateRaytraceJobsListFilename(obshistid, filter):
+def generateRaytraceJobManifestFilename(obshistid, filter):
   return '%s-f%s-Jobs.lis' %(obshistid, filter)
 
 class ParsFilenames(object):

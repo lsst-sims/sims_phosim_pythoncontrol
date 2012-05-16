@@ -20,7 +20,7 @@ import ConfigParser
 import getpass   # for getting username
 import datetime
 from AbstractScriptGenerator import *
-from Focalplane import generateRaytraceJobsListFilename
+from Focalplane import generateRaytraceJobManifestFilename
 
 
 class SingleVisitScriptGenerator(AbstractScriptGenerator):
@@ -33,7 +33,7 @@ class SingleVisitScriptGenerator(AbstractScriptGenerator):
     something in the .cfg file changes.  Each call to makeScript() sets all the
     variables change per visit.
     """
-    def __init__(self, scriptInvocationPath, scriptOutList, policy, imsimConfigFile,
+    def __init__(self, scriptInvocationPath, preprocScriptManifest, policy, imsimConfigFile,
                  extraIdFile, sourceFileTgzName, execFileTgzName, controlFileTgzName,
                  tmpdir):
 
@@ -45,7 +45,7 @@ class SingleVisitScriptGenerator(AbstractScriptGenerator):
         self.execFileTgzName = execFileTgzName
         self.controlFileTgzName = controlFileTgzName
         self.scriptInvocationPath = scriptInvocationPath
-        self.scriptOutList = scriptOutList
+        self.preprocScriptManifest = preprocScriptManifest
         #self.scriptFileName = scriptFileName
         self.policy = policy
         #self.obsHistID = obsHistID
@@ -137,7 +137,7 @@ class SingleVisitScriptGenerator(AbstractScriptGenerator):
 
         self.stageFiles(trimfileName, trimfileBasename, trimfilePath,
                         filterName, filterNum, obsHistID, origObsHistID,
-                        scriptFileName, self.scriptOutList, visitDir,
+                        scriptFileName, self.preprocScriptManifest, visitDir,
                         visitLogPath)
 
 
@@ -250,13 +250,13 @@ class SingleVisitScriptGenerator(AbstractScriptGenerator):
                       %(self.pythonExec, obshistid, filterName, self.stagePath2)
                 cshOut.write('echo Verifying output files: %s\n' %cmd)
                 cshOut.write("time %s\n" %cmd)
-                jobsListFilename = generateRaytraceJobsListFilename(obshistid, filterName)
+                jobsManifestFilename = generateRaytraceJobManifestFilename(obshistid, filterName)
                 cshOut.write("if ($status) then\n")
                 cshOut.write("  echo Error in verifyFiles.py!\n")
-                cshOut.write("  cp verify.out %s\n" %os.path.join(self.stagePath2, jobsListFilename))
+                cshOut.write("  cp verify.out %s\n" %os.path.join(self.stagePath2, jobsManifestFilename))
                 cshOut.write("else\n")
                 cshOut.write("  echo Output file verification completed with no errors.\n")
-                cshOut.write('  cp %s %s \n'%(jobsListFilename, self.stagePath2))
+                cshOut.write('  cp %s %s \n'%(jobsManifestFilename, self.stagePath2))
                 cshOut.write("endif\n")
         except IOError:
             print "Could not open %s for writing jobCommands for PBS script" %(scriptFileName)
@@ -270,7 +270,7 @@ class SingleVisitScriptGenerator(AbstractScriptGenerator):
 
     def stageFiles(self, trimfileAbsName, trimfileBasename, trimfilePath,
                    filterName, filterNum, obshistid, origObshistid,
-                   scriptFileName, scriptOutList, visitDir, visitLogPath):
+                   scriptFileName, preprocScriptManifest, visitDir, visitLogPath):
         stagePath = self.stagePath
         # We should be in the script's invocation directory
         assert os.getcwd() == self.scriptInvocationPath
@@ -311,20 +311,20 @@ class SingleVisitScriptGenerator(AbstractScriptGenerator):
             print 'Staging directory', trimfileStagePath, 'already exists...'
             print '...Assuming trimfile is already present.'
 
-        self._writeScriptOutList(scriptOutList, scriptFileName, stagePath, visitLogPath)
+        self._writePreprocScriptManifest(preprocScriptManifest, scriptFileName, stagePath, visitLogPath)
         return
 
-    def _writeScriptOutList(self, scriptOutList, scriptFileName, stagePath, visitLogPath):
+    def _writePreprocScriptManifest(self, preprocScriptManifest, scriptFileName, stagePath, visitLogPath):
         # Generate the list of job scripts for the ray tracing and post processing
         fileDest = os.path.join(stagePath, os.path.basename(scriptFileName))
-        print 'Attempting to add %s to file %s in %s' %(fileDest, scriptOutList,
+        print 'Attempting to add %s to file %s in %s' %(fileDest, preprocScriptManifest,
                                                         self.scriptInvocationPath)
         #os.chdir(self.imsimSourcePath)  Now created in scriptInvocationPath
         try:
-            with file(scriptOutList, 'a') as parFile:
-                parFile.write('%s \n' %(fileDest))
+            with file(preprocScriptManifest, 'a') as parFile:
+                parFile.write('csh %s \n' %(fileDest))
         except IOError:
-            print "Could not open %s in writeScriptOutList." % parFile
+            print "Could not open %s in writePreprocScriptManifest." % parFile
             sys.exit()
         return
 
@@ -332,13 +332,13 @@ class SingleVisitScriptGenerator(AbstractScriptGenerator):
 
 class SingleVisitScriptGenerator_Pbs(SingleVisitScriptGenerator):
 
-    def __init__(self, scriptInvocationPath, scriptOutList, policy, imsimConfigFile,
+    def __init__(self, scriptInvocationPath, preprocScriptManifest, policy, imsimConfigFile,
                  extraIdFile, sourceFileTgzName, execFileTgzName, controlFileTgzName,
                  tmpdir):
         """
         Augment the superclass's constructor to have the PBS 'username' appended to it.
         """
-        SingleVisitScriptGenerator.__init__(self, scriptInvocationPath, scriptOutList, policy,
+        SingleVisitScriptGenerator.__init__(self, scriptInvocationPath, preprocScriptManifest, policy,
                                              imsimConfigFile, extraIdFile, sourceFileTgzName,
                                             execFileTgzName, controlFileTgzName, tmpdir)
         self.username =   self.policy.get('pbs','username')
@@ -376,7 +376,7 @@ class SingleVisitScriptGenerator_Pbs(SingleVisitScriptGenerator):
         else:
             queue = '-q %s' %(queueTmp)
 
-        filename = '%s_f%s' %(obshistid, filterName)
+        filename = '%s-f%s' %(obshistid, filterName)
         paramdir = '%s-f%s' %(obshistid, filterName)
         savePath = os.path.join(saveDir, paramdir)
 
@@ -505,4 +505,18 @@ class SingleVisitScriptGenerator_Pbs(SingleVisitScriptGenerator):
         print >>pbsout, " "
         # close file
         pbsout.close()
+        return
+
+    def _writePreprocScriptManifest(self, preprocScriptManifest, scriptFileName, stagePath, visitLogPath):
+        # Generate the list of job scripts for the ray tracing and post processing
+        fileDest = os.path.join(stagePath, os.path.basename(scriptFileName))
+        print 'Attempting to add %s to file %s in %s' %(fileDest, preprocScriptManifest,
+                                                        self.scriptInvocationPath)
+        #os.chdir(self.imsimSourcePath)  Now created in scriptInvocationPath
+        try:
+            with file(preprocScriptManifest, 'a') as parFile:
+                parFile.write('qsub %s \n' %(fileDest))
+        except IOError:
+            print "Could not open %s in writePreprocScriptManifest." % parFile
+            sys.exit()
         return
