@@ -317,17 +317,15 @@ class SingleVisitScriptGenerator(AbstractScriptGenerator):
     def _writePreprocScriptManifest(self, preprocScriptManifest, scriptFileName, stagePath, visitLogPath):
         # Generate the list of job scripts for the ray tracing and post processing
         fileDest = os.path.join(stagePath, os.path.basename(scriptFileName))
-        print 'Attempting to add %s to file %s in %s' %(fileDest, preprocScriptManifest,
-                                                        self.scriptInvocationPath)
-        #os.chdir(self.imsimSourcePath)  Now created in scriptInvocationPath
         try:
             with file(preprocScriptManifest, 'a') as parFile:
                 parFile.write('csh %s \n' %(fileDest))
         except IOError:
-            print "Could not open %s in writePreprocScriptManifest." % parFile
+            print "Could not open %s in writePreprocScriptManifest to add %s." \
+                  % (preprocScriptManifest, fileDest)
             sys.exit()
+        print 'Added %s to file %s' %(fileDest, preprocScriptManifest)
         return
-
 
 
 class SingleVisitScriptGenerator_Pbs(SingleVisitScriptGenerator):
@@ -510,13 +508,12 @@ class SingleVisitScriptGenerator_Pbs(SingleVisitScriptGenerator):
     def _writePreprocScriptManifest(self, preprocScriptManifest, scriptFileName, stagePath, visitLogPath):
         # Generate the list of job scripts for the ray tracing and post processing
         fileDest = os.path.join(stagePath, os.path.basename(scriptFileName))
-        print 'Attempting to add %s to file %s in %s' %(fileDest, preprocScriptManifest,
-                                                        self.scriptInvocationPath)
-        #os.chdir(self.imsimSourcePath)  Now created in scriptInvocationPath
         try:
             with file(preprocScriptManifest, 'a') as parFile:
                 parFile.write('qsub %s \n' %(fileDest))
         except IOError:
-            print "Could not open %s in writePreprocScriptManifest." % parFile
+            print "Could not open %s in writePreprocScriptManifest to add %s." \
+                  % (preprocScriptManifest, fileDest)
             sys.exit()
+        print 'Added %s to file %s' %(fileDest, preprocScriptManifest)
         return

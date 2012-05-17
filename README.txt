@@ -247,6 +247,23 @@ Simplifications:
    - dataTarballPRE and dataTarballSEDs can be the same tarball
 
 
+A note on the shared dataset (QE maps, SEDs, etc):
+--------------------------------------------------
+
+The shared dataset can either be staged to the exec node, or a
+symbolic link can be made between the execution directory (on the exec
+node) and its location in shared storage.  For executing on a
+workstation (or anywhere where the shared data location is permanently
+on a filesystem local to the execution node) the latter is
+recommended.  Selecting this behavior for the preprocessing stage is
+achieved by setting "useSharedPRE".  For the raytracing stage, set
+"useSharedSEDs".
+
+When executing in a distributed environment, it is recommended that
+"useSharedSEDs" be "false".  For some clusters, setting "useSharedPRE"
+to "true" might still work well, since the preprocessing stage only
+needs to access a single file per focal plane.
+
 !!!!!!!!!!!!!!!!
  IMPORTANT NOTE: Unlike with the "full_focalplane" shell script, the shared data
 !!!!!!!!!!!!!!!! tarball used here should *not* contain "data" as the root
