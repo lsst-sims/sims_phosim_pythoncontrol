@@ -17,6 +17,14 @@ The correct procedure is to:
   2) Check out a compatible revision of the Python control package
   3) Execute from the directory containing the Python control package
 
+==========================
+REQUIREMENTS
+==========================
+1. The proper revision of ImSim (see "REVISIONS" below)
+2. The "fitsverify" executable from the package
+   http://heasarc.gsfc.nasa.gov/docs/software/ftools/fitsverify/
+   must be in your path for the raytracing stage (see below).
+3. Python 2.5 or later
 
 ==========================
 REVISIONS
@@ -272,3 +280,21 @@ needs to access a single file per focal plane.
                  etc should be in the root of the tarball.
           
 
+==========================
+VERIFYING FILES
+==========================
+
+"verifyFiles.py" can be used to verify the output of both the
+preprocessing and raytrace stages.  The control scripts automatically
+verify proprocessing output (in shared storage) as well as raytracing
+output (on the execution node).  The details for parsing the output
+from each of these steps is given above.
+
+The control scripts do not automatically verify that an entire focalplane
+has completed the raytracing stage and been stored in <savePath>.  To
+do this, you can execute:
+  verifyFiles.py <obshistid> <filter> <savePath>
+
+Note that <savePath> also has to include "imSim/PT1.2" if it is
+present (i.e. it should be the path to the "eimage" and "raw"
+directories).
