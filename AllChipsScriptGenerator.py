@@ -148,12 +148,12 @@ class AllChipsScriptGenerator:
         self.catListFile       = _d['catlist']
         self.trackingParFile   = _d['tracking']
         self.trackParFile      = _d['track']
-        return                
+        return
 
     def _readTrimfilesAndCalculateParams(self):
         # Read in the default catalog first, then replace the non-default
         # values with the actual trimfile
-        print 'Using instance catalog: default_instcat', 
+        print 'Using instance catalog: default_instcat',
         print '***'
         with open('default_instcat','r') as trimfile:
             self._readTrimfile(trimfile)
@@ -163,7 +163,6 @@ class AllChipsScriptGenerator:
             self._readTrimfile(trimfile)
         self._calculateParams()
         return
-      
 
     def _readTrimfile(self, trimfile):
         print 'Initializing Opsim and Instance Catalog Parameters.'

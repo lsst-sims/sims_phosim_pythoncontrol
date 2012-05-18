@@ -61,7 +61,7 @@ class TestSingleVisitScriptGenerator(unittest.TestCase):
     # This will raise an exception if it does not read in the config file
     s = MockSingleVisitScriptGenerator_Pbs('/tmp', '_tmp.out', self.policy, self.imsimConfigFile,
                                            self.extraidFile, '_tmp.src.tgz', '_tmp.exec.tgz',
-                                           '_tmp.control.tgz', '_tmp')
+                                           '_tmp.control.tgz', '/tmp')
 
     # These variables will not be defined if config file not read in properly
     try:

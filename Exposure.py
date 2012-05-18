@@ -121,4 +121,3 @@ class Exposure(object):
         for name in names:
             verifyFileExistence(missingList, os.path.join(outputPath, path), name)
         return missingList
-
