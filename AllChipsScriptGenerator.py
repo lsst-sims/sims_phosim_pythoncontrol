@@ -92,17 +92,7 @@ class AllChipsScriptGenerator:
         #
         # LSST-specific params
         #
-        # Read in the default catalog first, then replace the non-default
-        # values with the actual trimfile
-        print 'Using instance catalog: default_instcat', 
-        print '***'
-        with open('default_instcat','r') as trimfile:
-            self._readTrimfile(trimfile)
-        print 'Using instance catalog: ', self.trimfile
-        print '***'
-        with open(self.trimfile,'r') as trimfile:
-            self._readTrimfile(trimfile)
-        self._calculateParams()
+        self._readTrimfilesAndCalculateParams()
 
         # Get non-default commands & extra ID
         self.centid = '0'
@@ -159,6 +149,21 @@ class AllChipsScriptGenerator:
         self.trackingParFile   = _d['tracking']
         self.trackParFile      = _d['track']
         return                
+
+    def _readTrimfilesAndCalculateParams(self):
+        # Read in the default catalog first, then replace the non-default
+        # values with the actual trimfile
+        print 'Using instance catalog: default_instcat', 
+        print '***'
+        with open('default_instcat','r') as trimfile:
+            self._readTrimfile(trimfile)
+        print 'Using instance catalog: ', self.trimfile
+        print '***'
+        with open(self.trimfile,'r') as trimfile:
+            self._readTrimfile(trimfile)
+        self._calculateParams()
+        return
+      
 
     def _readTrimfile(self, trimfile):
         print 'Initializing Opsim and Instance Catalog Parameters.'

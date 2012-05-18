@@ -5,13 +5,9 @@ from AllChipsScriptGenerator import *
 from optparse import OptionParser
 
 class MockAllChipsScriptGenerator(AllChipsScriptGenerator):
-  def _readTrimfileAndCalculateParams(self, rx, ry, sx, sy, ex):
-    self.myrx = rx
-    self.myry = ry
-    self.mysx = sx
-    self.mysy = sy
-    self.myex = ex
-
+  def _readTrimfilesAndCalculateParams(self):
+    self.camconfig = 1
+    self.camstr = 'Group0'
     self.obshistid = '123456'
     self.filt = '2'
     return
@@ -21,13 +17,9 @@ class MockAllChipsScriptGenerator(AllChipsScriptGenerator):
 
 
 class MockAllChipsScriptGenerator_Pbs(AllChipsScriptGenerator_Pbs):
-  def _readTrimfileAndCalculateParams(self, rx, ry, sx, sy, ex):
-    self.myrx = rx
-    self.myry = ry
-    self.mysx = sx
-    self.mysy = sy
-    self.myex = ex
-
+  def _readTrimfilesAndCalculateParams(self):
+    self.camconfig = 1
+    self.camstr = 'Group0'
     self.obshistid = '123456'
     self.filt = '2'
     return
@@ -59,8 +51,7 @@ class TestAllChipsScriptGenerator(unittest.TestCase):
     """
     self._SetupWorkstation()
     # This will raise an exception if it does not read in the config file
-    s = MockAllChipsScriptGenerator('mockTrimFile', self.policy, self.extraidFile,
-                                    self.rx, self.ry, self.sx, self.sy, self.ex)
+    s = MockAllChipsScriptGenerator('mockTrimFile', self.policy, self.extraidFile)
 
     # This variable will not be defined if config file not read in properly
     try:
@@ -79,8 +70,7 @@ class TestAllChipsScriptGenerator(unittest.TestCase):
   def test_InitPbs(self):
     self._SetupPbs()
     # This will raise an exception if it does not read in the config file
-    s = MockAllChipsScriptGenerator_Pbs('mockTrimFile', self.policy, self.extraidFile,
-                                    self.rx, self.ry, self.sx, self.sy, self.ex)
+    s = MockAllChipsScriptGenerator_Pbs('mockTrimFile', self.policy, self.extraidFile)
 
     # These variables will not be defined if config file not read in properly
     try:

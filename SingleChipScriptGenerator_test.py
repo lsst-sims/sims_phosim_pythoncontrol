@@ -4,38 +4,6 @@ import unittest
 from SingleChipScriptGenerator import *
 from optparse import OptionParser
 
-class MockSingleChipScriptGenerator(SingleChipScriptGenerator):
-  def _readTrimfileAndCalculateParams(self, rx, ry, sx, sy, ex):
-    self.myrx = rx
-    self.myry = ry
-    self.mysx = sx
-    self.mysy = sy
-    self.myex = ex
-
-    self.obshistid = '123456'
-    self.filt = '2'
-    return
-
-  def _makePaths(self):
-    return
-
-
-class MockSingleChipScriptGenerator_Pbs(SingleChipScriptGenerator_Pbs):
-  def _readTrimfileAndCalculateParams(self, rx, ry, sx, sy, ex):
-    self.myrx = rx
-    self.myry = ry
-    self.mysx = sx
-    self.mysy = sy
-    self.myex = ex
-
-    self.obshistid = '123456'
-    self.filt = '2'
-    return
-
-  def _makePaths(self):
-    return
-
-
 class TestSingleChipScriptGenerator(unittest.TestCase):
 
   def _SetupWorkstation(self):
