@@ -88,6 +88,7 @@ class AllChipsScriptGenerator:
         self.stagePath = self.policy.get('general','stagePath1')
         self.stagePath2 = self.policy.get('general','stagePath2')
         self.useSharedSEDs = self.policy.getboolean('general','useSharedSEDs')
+        self.debugLevel = self.policy.getint('general','debuglevel')
 
         #
         # LSST-specific params
@@ -239,6 +240,15 @@ class AllChipsScriptGenerator:
             if line.startswith('SIM_NSNAP'):
                 self.nsnap = int(line.split()[1])
                 print 'Sim_Nsnap: ', self.nsnap
+            if line.startswith('isDithered'):
+                self.isDithered = int(line.split()[1])
+                print 'isDithered: ', self.isDithered
+            if line.startswith('ditherRaOffset'):
+                self.ditherRaOffset = float(line.split()[1])
+                print 'ditherRaOffset: ', self.ditherRaOffset
+            if line.startswith('ditherDecOffset'):
+                self.ditherDecOffset = float(line.split()[1])
+                print 'ditherDecOffset: ', self.ditherDecOffset
         return
 
     def _calculateParams(self):
@@ -465,6 +475,9 @@ class AllChipsScriptGenerator:
             parFile.write('seddir ../data/ \n')
             parFile.write('obshistid %s \n' %(self.obshistid))
             parFile.write('tai %s \n' %(self.tai))
+            parFile.write('dithered %s\n' %self.isDithered)
+            parFile.write('ditherra %s\n' %self.ditherRaOffset)
+            parFile.write('ditherdec %s\n' %self.ditherDecOffset)
 
         return
 
@@ -1096,7 +1109,10 @@ class AllChipsScriptGenerator:
             for exec_filename in sorted(glob.glob('exec_%s_*.csh' %(self.obshistid))):
                 shutil.copy(exec_filename, '%s' %(self.paramDir))
                 os.remove(exec_filename)
-                scriptList.write('csh %s\n' %os.path.join(self.paramDir, exec_filename))
+                cmd = 'csh'
+                if self.debugLevel > 0:
+                  cmd += ' -x'
+                scriptList.write('%s %s\n' %(cmd, os.path.join(self.paramDir, exec_filename)))
 
         try:
             for cmds in glob.glob('cmds_*.txt'):

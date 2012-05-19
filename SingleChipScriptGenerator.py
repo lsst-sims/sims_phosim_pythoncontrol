@@ -31,6 +31,7 @@ import random
 import getpass   # for getting username
 import chip
 from AbstractScriptGenerator import *
+from Exposure import Exposure
 
 def generateVerifyErrorFilename(id):
   return '%s.verify_error' %id
@@ -149,6 +150,7 @@ class SingleChipScriptGenerator(AbstractScriptGenerator):
 
         id = '%s_%s' %(cid, expid)
         wuID = '%s-f%s-%s' %(self.obshistid, self.filterName, id)
+        self.exposure = Exposure(self.obshistid, self.filterName, id)
         jobFileName = self.getJobFileName(id)
 
         self.writeHeader(jobFileName, wuID, cid, expid, visitLogPath)
@@ -331,7 +333,7 @@ class SingleChipScriptGenerator(AbstractScriptGenerator):
         print >>jobOut, "### MOVE the image files to shared directory"
         print >>jobOut, "### ---------------------------------------"
 
-        eimage = 'eimage_%s_f%s_%s.fits.gz' %(self.obshistid, self.filterNum, id)
+        eimage = self.exposure.generateEimageExecName()
         baseName = 'eimage'
         fnVerified = generateVerifyFilename(id)
         jobOut.write("if ( -e %s) then\n" %fnVerified)
@@ -345,11 +347,9 @@ class SingleChipScriptGenerator(AbstractScriptGenerator):
         print >>jobOut, "  %s pbs/distributeFiles.py %s %s/%s %s" %(self.pythonExec, self.savePath,
                                                                   scratchOutputPath, eimage, baseName)
 
-        with open('lsst/segmentation.txt', 'r') as ampFile:
-          ampList = chip.readAmpList(ampFile, cid)
-        for ampid in ampList:
-            image = 'imsim_%s_f%s_%s_%s.fits.gz' %(self.obshistid, self.filterNum, ampid, expid)
-            baseName = 'imsim'
+        imageNames = self.exposure.generateRawExecNames()
+        baseName = 'imsim'
+        for image in imageNames:
             print >>jobOut, "  echo Now moving %s/%s" %(scratchOutputPath, image)
             print >>jobOut, "  echo calling %s pbs/distributeFiles.py %s %s/%s %s" %(self.pythonExec, self.savePath, scratchOutputPath, image, baseName)
             print >>jobOut, "  %s pbs/distributeFiles.py %s %s/%s %s" %(self.pythonExec, self.savePath, scratchOutputPath, image, baseName)

@@ -317,9 +317,12 @@ class SingleVisitScriptGenerator(AbstractScriptGenerator):
     def _writePreprocScriptManifest(self, preprocScriptManifest, scriptFileName, stagePath, visitLogPath):
         # Generate the list of job scripts for the ray tracing and post processing
         fileDest = os.path.join(stagePath, os.path.basename(scriptFileName))
+        cmd = 'csh'
+        if self.debugLevel > 0:
+          cmd += ' -x'
         try:
             with file(preprocScriptManifest, 'a') as parFile:
-                parFile.write('csh %s \n' %(fileDest))
+                parFile.write('%s %s \n' %(cmd, fileDest))
         except IOError:
             print "Could not open %s in writePreprocScriptManifest to add %s." \
                   % (preprocScriptManifest, fileDest)
