@@ -918,6 +918,7 @@ class AllChipsScriptGenerator:
             parFile.write('point_alt %s \n' %(self.alt))
             parFile.write('point_az %s \n' %(self.az))
             parFile.write('filter %s \n' %(self.filt))
+            parFile.write('spiderangle %s \n' %(self.spid))
             parFile.write('rot_ang %s \n' %(self.prot))
             parFile.write('chip_id %s \n' %(cid))
             parFile.write('solar_zen %s \n' %(self.sunzen))
