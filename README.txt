@@ -64,6 +64,12 @@ v-2.2 		       v-2.2.1    Addition of unit tests
 v-2.2.1                v-2.2.1    Minor tweaks and bug fixes.  Last
                 mirrors/exacycle  tag to work with ImSim v-2.2.1
 
+v-3.0.1                v-3.0.1    Updated to work with ImSim v-3.0.1.
+				  Lots of updates, including the
+				  addition of timers for all major
+				  workflow components, and the
+				  "verifyFiles.py" script, which is
+				  documented below.
 
 	
 ==========================
