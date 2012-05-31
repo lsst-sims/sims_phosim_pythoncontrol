@@ -277,9 +277,12 @@ class SingleVisitScriptGenerator(AbstractScriptGenerator):
         # Move the visit and script files to stagedir.
         print 'Moving Exec, Visit & Script Files to %s:' %(stagePath)
         # Use shutil.copy instead of shutil.move because the former overwrites
-        self._copyAndRemoveFile(os.path.join(self.tmpdir, self.sourceFileTgzName), stagePath)
-        self._copyAndRemoveFile(os.path.join(self.tmpdir, self.execFileTgzName), stagePath)
-        self._copyAndRemoveFile(os.path.join(self.tmpdir, self.controlFileTgzName), stagePath)
+        # We don't want to remove the tarballs here because they will be needed
+        # for other visits.  AllVisitScriptGenerator will remove tmpdir when
+        # it finishes.
+        shutil.copy(os.path.join(self.tmpdir, self.sourceFileTgzName), stagePath)
+        shutil.copy(os.path.join(self.tmpdir, self.execFileTgzName), stagePath)
+        shutil.copy(os.path.join(self.tmpdir, self.controlFileTgzName), stagePath)
         os.chmod(scriptFileName, 0775)
         self._copyAndRemoveFile(scriptFileName, stagePath)
 
