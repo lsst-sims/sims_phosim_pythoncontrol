@@ -88,7 +88,8 @@ class SingleChipScriptGenerator(AbstractScriptGenerator):
           self.scratchSharedPath = self.policy.get('general','scratchDataPathSEDs')
         # writeCopySharedData() will check the existence of self.dataCheckDir
         # to determine if it needs to grab and untar self.tarball.
-        self.dataCheckDir = 'starSED/gizis_SED'
+        self.dataCheckDirSEDs = 'starSED/gizis_SED'
+        self.dataCheckDirFP = 'focal_plane/sta_misalignments/qe_maps'
         # Directories and filenames
         self.savePath  = self.policy.get('general','savePath')
         self.scratchPath = self.policy.get('general','scratchExecPath')
@@ -155,7 +156,7 @@ class SingleChipScriptGenerator(AbstractScriptGenerator):
 
         self.writeHeader(jobFileName, wuID, cid, expid, visitLogPath)
         self.writeSetupExecDirs(jobFileName, wuID)
-        self.writeCopySharedData(jobFileName, wuID)
+        self.writeCopySharedData(jobFileName, wuID, True, True)
         self.writeCopyStagedFiles(jobFileName, wuID, cid, expid, raytraceParFile,
                                  backgroundParFile, cosmicParFile, trimcatalogParFile)
         self.writeJobCommands(jobFileName, wuID, cid, id, expid)

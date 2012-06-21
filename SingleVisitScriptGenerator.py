@@ -63,16 +63,16 @@ class SingleVisitScriptGenerator(AbstractScriptGenerator):
         self.debugLevel = self.policy.getint('general','debuglevel')
         self.sleepMax = self.policy.getint('general','sleepmax')
         # Shared data locations
-        self.imsimDataPath = self.policy.get('general','dataPathPRE')
-        self.useSharedData = self.policy.getboolean('general','useSharedPRE')
-        self.tarball = self.policy.get('general','dataTarballPRE')
-        if self.useSharedData == True:
-          self.scratchSharedPath = self.imsimDataPath
-        else:
-          self.scratchSharedPath = self.policy.get('general','scratchDataPathPRE')
+        #self.imsimDataPath = self.policy.get('general','dataPathPRE')
+        #self.useSharedData = self.policy.getboolean('general','useSharedPRE')
+        #self.tarball = self.policy.get('general','dataTarballPRE')
+        #if self.useSharedData == True:
+        #  self.scratchSharedPath = self.imsimDataPath
+        #else:
+        #  self.scratchSharedPath = self.policy.get('general','scratchDataPathPRE')
         # writeCopySharedData() will check the existence of self.dataCheckDir
         # to determine if it needs to grab and untar self.tarball.
-        self.dataCheckDir = 'focal_plane/sta_misalignments/qe_maps'
+        self.dataCheckDirFP = 'focal_plane/sta_misalignments/qe_maps'
         # Directories and filenames
         self.scratchPath = self.policy.get('general','scratchExecPath')
         self.savePath  = self.policy.get('general','savePath')
@@ -128,7 +128,7 @@ class SingleVisitScriptGenerator(AbstractScriptGenerator):
 
         self.writeHeader(scriptFileName, visitDir, filterName, obsHistID, visitLogPath)
         self.writeSetupExecDirs(scriptFileName, visitDir)
-        self.writeCopySharedData(scriptFileName, visitDir)
+        self.writeCopySharedData(scriptFileName, visitDir, needFP=True)
         self.writeCopyStagedFiles(scriptFileName, trimfileName, trimfileBasename, trimfilePath,
                               filterName, filterNum, obsHistID, origObsHistID, visitDir)
         self.writeJobCommands(scriptFileName, trimfileName, trimfileBasename, trimfilePath,

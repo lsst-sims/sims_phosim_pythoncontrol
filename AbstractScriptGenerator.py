@@ -104,9 +104,39 @@ class AbstractScriptGenerator:
         return
 
 
-    def writeCopySharedData(self, scriptFileName, visitDir):
 
-        visitPath = os.path.join(self.scratchPath, visitDir)
+    def _writeCopyDataTarball(self, cshOut, dataPath, dataTarball,
+                              scratchSharedPath, dataCheckDir):
+        # Make sure your shared directory on the compute node exists
+        cshOut.write('if ( ! -d %s ) then \n' %(scratchSharedPath))
+        cshOut.write('  mkdir -p %s \n' %(scratchSharedPath))
+        cshOut.write('endif \n')
+        cshOut.write('cd %s \n' %(scratchSharedPath))
+        # Make sure the data directory and all files are present on the exec node.
+        cshOut.write('echo Initializing lock file. \n')
+        cshOut.write('lockfile -l 1800 imsim_shared_data.lock \n')
+        cshOut.write('if (-d %s ) then \n' %dataCheckDir)
+        cshOut.write('  echo Good news everyone! The data directory %s already exists! \n'
+                     %os.path.join(scratchSharedPath, dataCheckDir))
+        cshOut.write('else \n')
+        cshOut.write('  echo The shared data directory %s does not exist. Copying %s. \n'
+                     %(os.path.join(scratchSharedPath, dataCheckDir),
+                       os.path.join(dataPath, dataTarball)))
+        cshOut.write('  cp %s . \n' %(os.path.join(dataPath, dataTarball)))
+        cshOut.write('  echo Untarring %s \n' %(dataTarball))
+        cshOut.write('  tar xf %s \n' %(dataTarball))
+        cshOut.write('  rm %s \n' %(dataTarball))
+        cshOut.write('  echo Finished copying shared data to exec node.\n')
+        cshOut.write('endif \n')
+        # cshOut.write('cp $PBS_O_WORKDIR/verifyData.py . \n')
+        # cshOut.write('python verifyData.py \n')
+        cshOut.write('rm -f imsim_shared_data.lock \n')
+        cshOut.write('echo Removed lock file and copying files for the node. \n')
+
+
+    def writeCopySharedData(self, scriptFileName, wuID, needFP=False, needSEDS=False):
+
+        wuPath = os.path.join(self.scratchPath, wuID)
         if self.sleepMax > 0:
             myRandInt = random.randint(0,self.sleepMax)
         else:
@@ -121,33 +151,26 @@ class AbstractScriptGenerator:
                 print >>cshOut, " "
                 cshOut.write('echo Sleeping for %s seconds. \n' %(myRandInt))
                 cshOut.write('sleep %s \n' %(myRandInt))
-                #cshOut.write('cd $PBS_O_WORKDIR \n')
-                if self.useSharedData == False:
-                  # Make sure your shared directory on the compute node exists
-                  cshOut.write('if ( ! -d %s ) then \n' %(self.scratchSharedPath))
-                  cshOut.write('  mkdir -p %s \n' %(self.scratchSharedPath))
-                  cshOut.write('endif \n')
-                  cshOut.write('cd %s \n' %(self.scratchSharedPath))
-                # Make sure the data directory and all files are present on the exec node.
-                  cshOut.write('echo Initializing lock file. \n')
-                  cshOut.write('lockfile -l 1800 imsim_shared_data.lock \n')
-                  cshOut.write('if (-d %s ) then \n' %self.dataCheckDir)
-                  cshOut.write('  echo Good news everyone! The data directory %s already exists! \n'
-                               %os.path.join(self.scratchSharedPath, self.dataCheckDir))
-                  cshOut.write('else \n')
-                  cshOut.write('  echo The shared data directory %s does not exist. Copying %s. \n'
-                               %(os.path.join(self.scratchSharedPath, self.dataCheckDir),
-                                 os.path.join(self.imsimDataPath, self.tarball)))
-                  cshOut.write('  cp %s . \n' %(os.path.join(self.imsimDataPath, self.tarball)))
-                  cshOut.write('  echo Untarring %s \n' %(self.tarball))
-                  cshOut.write('  tar xf %s \n' %(self.tarball))
-                  cshOut.write('  rm %s \n' %(self.tarball))
-                  cshOut.write('  echo Finished copying shared data to exec node.\n')
-                  cshOut.write('endif \n')
-                  # cshOut.write('cp $PBS_O_WORKDIR/verifyData.py . \n')
-                  # cshOut.write('python verifyData.py \n')
-                  cshOut.write('rm -f imsim_shared_data.lock \n')
-                  cshOut.write('echo Removed lock file and copying files for the node. \n')
+                execDataPath = os.path.join(wuPath, 'data')
+                cshOut.write('mkdir %s\n' %execDataPath)
+                if needFP:
+                    self.policy.getboolean('general', 'useSharedFP') == False:
+                        scratchDataPath = self.policy.get('general','scratchDataPathFP')
+                        self._writeCopyDataTarball(cshOut,
+                                                   self.policy.get('general','dataPathFP'),
+                                                   self.policy.get('general','dataTarballFP'),
+                                                   scratchDataPath,
+                                                   self.dataCheckDirFP)
+                        cshOut.write('cd %s\n' %execDataPath)
+                        cshOut.write('ln -s %s focal_plane' %os.path.join(scratch_data_path, 'focal_plane'))
+                else:
+                    
+                if needSEDs and self.policy.getboolean('general', 'useSharedSEDs') == False:
+                    self._writeCopyDataTarball(cshOut,
+                                               self.policy.get('general','dataPathSEDs'),
+                                               self.policy.get('general','dataTarballSEDs'),
+                                               self.policy.get('general','scratchDataPathSEDs'),
+                                               self.dataCheckDirSEDs)
         except IOError:
             print "Could not open %s for writing shell script" %(scriptFileName)
             sys.exit()
