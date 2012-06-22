@@ -70,9 +70,6 @@ class SingleVisitScriptGenerator(AbstractScriptGenerator):
         #  self.scratchSharedPath = self.imsimDataPath
         #else:
         #  self.scratchSharedPath = self.policy.get('general','scratchDataPathPRE')
-        # writeCopySharedData() will check the existence of self.dataCheckDir
-        # to determine if it needs to grab and untar self.tarball.
-        self.dataCheckDirFP = 'focal_plane/sta_misalignments/qe_maps'
         # Directories and filenames
         self.scratchPath = self.policy.get('general','scratchExecPath')
         self.savePath  = self.policy.get('general','savePath')
@@ -105,7 +102,7 @@ class SingleVisitScriptGenerator(AbstractScriptGenerator):
         (* indicates these are defined in AbstractScriptGenerator):
            - writeHeader            Write script header
            - writeSetupExecDirs*    Write commands to setup the directories on exec node
-           - writeCopySharedData*   Write commands to copy the shared data tarball to exec node
+           - writeSetupSharedData*  Write commands to copy the shared data tarball to exec node
            - writeCopyStagedFiles   Write commands to copy staged data to exec node
            - writeJobCommands       Write the actual execution commands
            - writeCleanupCommands*  Write the commands to cleanup
@@ -128,7 +125,7 @@ class SingleVisitScriptGenerator(AbstractScriptGenerator):
 
         self.writeHeader(scriptFileName, visitDir, filterName, obsHistID, visitLogPath)
         self.writeSetupExecDirs(scriptFileName, visitDir)
-        self.writeCopySharedData(scriptFileName, visitDir, needFP=True)
+        self.writeSetupSharedData(scriptFileName, visitDir, needFP=True)
         self.writeCopyStagedFiles(scriptFileName, trimfileName, trimfileBasename, trimfilePath,
                               filterName, filterNum, obsHistID, origObsHistID, visitDir)
         self.writeJobCommands(scriptFileName, trimfileName, trimfileBasename, trimfilePath,
@@ -211,10 +208,8 @@ class SingleVisitScriptGenerator(AbstractScriptGenerator):
                 #
                 # Set soft link to the catalog directory
                 #
-                cshOut.write('echo Setting soft link to data directory. \n')
-                cshOut.write('ln -s %s data \n' % self.scratchSharedPath)
-                # scratchOutputPath gets made in fullFocalPlane
-                #cshOut.write('mkdir %s \n' %(self.scratchOutputPath))
+                #cshOut.write('echo Setting soft link to data directory. \n')
+                #cshOut.write('ln -s %s data \n' % self.scratchSharedPath)
 
         except IOError:
             print "Could not open %s for writing jobCommands for PBS script" %(self.scriptFileName)

@@ -107,6 +107,16 @@ class AbstractScriptGenerator:
 
     def _writeCopyDataTarball(self, cshOut, dataPath, dataTarball,
                               scratchSharedPath, dataCheckDir):
+        """Generic method for copying and untarring a data tarball to
+           the compute node.
+        Inputs:
+           cshOut:            Pointer to output script
+           dataPath:          Path to the data tarball
+           dataTarBall:       Name of data tarball
+           scratchSharedPath: Directory into which to untar the tarball
+           dataCheckDir:      If this directory exists inside scratchSharedPath,
+                              do no bother staging tarball.
+        """
         # Make sure your shared directory on the compute node exists
         cshOut.write('if ( ! -d %s ) then \n' %(scratchSharedPath))
         cshOut.write('  mkdir -p %s \n' %(scratchSharedPath))
@@ -128,14 +138,23 @@ class AbstractScriptGenerator:
         cshOut.write('  rm %s \n' %(dataTarball))
         cshOut.write('  echo Finished copying shared data to exec node.\n')
         cshOut.write('endif \n')
-        # cshOut.write('cp $PBS_O_WORKDIR/verifyData.py . \n')
-        # cshOut.write('python verifyData.py \n')
         cshOut.write('rm -f imsim_shared_data.lock \n')
         cshOut.write('echo Removed lock file and copying files for the node. \n')
 
 
-    def writeCopySharedData(self, scriptFileName, wuID, needFP=False, needSEDS=False):
-
+    def writeSetupSharedData(self, scriptFileName, wuID, needFP=False, needSEDs=False):
+        """Writes commands to the script for setting up the 'data' directory
+           within the exec directory.  Whether it stages a tarball or symbolically
+           links to a shared directory is determed by the self.policy.
+        Args:
+           scriptFileName:   Name of the script being written to
+           wuID:             ID of the work unit, constructed as:
+                                wuID = '%s-f%s-%s' %(obshistid, filterName, id)
+                             where 'id' is of the form:
+                                id = 'R'+rx+ry+'_'+'S'+sx+sy+'_'+'E00'+ex
+           needFP:           'True' if focal_plane data is required
+           needSEDs:         'True' if SEDs are required
+        """
         wuPath = os.path.join(self.scratchPath, wuID)
         if self.sleepMax > 0:
             myRandInt = random.randint(0,self.sleepMax)
@@ -153,24 +172,47 @@ class AbstractScriptGenerator:
                 cshOut.write('sleep %s \n' %(myRandInt))
                 execDataPath = os.path.join(wuPath, 'data')
                 cshOut.write('mkdir %s\n' %execDataPath)
+                cshOut.write('cd %s\n' %execDataPath)
                 if needFP:
-                    self.policy.getboolean('general', 'useSharedFP') == False:
+                    if self.policy.getboolean('general', 'useSharedFP') == False:
                         scratchDataPath = self.policy.get('general','scratchDataPathFP')
+                        # writeCopyDataTarball() will check the existence of
+                        # 'focal_plane/sta_misalignments/qe_maps' to determine if it
+                        # needs to grab and untar self.tarball.
                         self._writeCopyDataTarball(cshOut,
                                                    self.policy.get('general','dataPathFP'),
                                                    self.policy.get('general','dataTarballFP'),
                                                    scratchDataPath,
-                                                   self.dataCheckDirFP)
-                        cshOut.write('cd %s\n' %execDataPath)
-                        cshOut.write('ln -s %s focal_plane' %os.path.join(scratch_data_path, 'focal_plane'))
-                else:
-                    
-                if needSEDs and self.policy.getboolean('general', 'useSharedSEDs') == False:
-                    self._writeCopyDataTarball(cshOut,
-                                               self.policy.get('general','dataPathSEDs'),
-                                               self.policy.get('general','dataTarballSEDs'),
-                                               self.policy.get('general','scratchDataPathSEDs'),
-                                               self.dataCheckDirSEDs)
+                                                   'focal_plane/sta_misalignments/qe_maps')
+                    else:
+                        scratchDataPath = self.policy.get('general','dataPathFP')
+                    cshOut.write('echo Setting soft link to focal_plane directory. \n')
+                    cshOut.write('ln -s %s focal_plane\n' %os.path.join(scratchDataPath,
+                                                                        'focal_plane'))
+                if needSEDs:
+                    if self.policy.getboolean('general', 'useSharedSEDs') == False:
+                        scratchDataPath = self.policy.get('general','scratchDataPathSEDs')
+                        # writeCopyDataTarball() will check the existence of
+                        # 'starSED/gizisSED' to determine if it
+                        # needs to grab and untar self.tarball.
+                        self._writeCopyDataTarball(cshOut,
+                                                   self.policy.get('general','dataPathSEDs'),
+                                                   self.policy.get('general','dataTarballSEDs'),
+                                                   scratchDataPath,
+                                                   'starSED/gizis_SED')
+                    else:
+                        scratchDataPath = self.policy.get('general','dataPathSEDs')
+                    cshOut.write('echo Setting soft link to SED data directories. \n')
+                    cshOut.write('ln -s %s agnSED\n' %os.path.join(scratchDataPath,
+                                                                 'agnSED'))
+                    cshOut.write('ln -s %s flatSED\n' %os.path.join(scratchDataPath,
+                                                                 'flatSED'))
+                    cshOut.write('ln -s %s galaxySED\n' %os.path.join(scratchDataPath,
+                                                                 'galaxySED'))
+                    cshOut.write('ln -s %s ssmSED\n' %os.path.join(scratchDataPath,
+                                                                 'ssmSED'))
+                    cshOut.write('ln -s %s starSED\n' %os.path.join(scratchDataPath,
+                                                                 'starSED'))
         except IOError:
             print "Could not open %s for writing shell script" %(scriptFileName)
             sys.exit()

@@ -86,10 +86,6 @@ class SingleChipScriptGenerator(AbstractScriptGenerator):
           self.scratchSharedPath = self.imsimDataPath
         else:
           self.scratchSharedPath = self.policy.get('general','scratchDataPathSEDs')
-        # writeCopySharedData() will check the existence of self.dataCheckDir
-        # to determine if it needs to grab and untar self.tarball.
-        self.dataCheckDirSEDs = 'starSED/gizis_SED'
-        self.dataCheckDirFP = 'focal_plane/sta_misalignments/qe_maps'
         # Directories and filenames
         self.savePath  = self.policy.get('general','savePath')
         self.scratchPath = self.policy.get('general','scratchExecPath')
@@ -132,7 +128,7 @@ class SingleChipScriptGenerator(AbstractScriptGenerator):
         (* indicates these are defined in AbstractScriptGenerator):
            - writeHeader              Write script header
            - writeSetupExecDirs*      Write commands to setup the directories on exec node
-           - writeCopySharedData*     Write commands to copy the shared data tarball to exec node
+           - writeSetupSharedData*    Write commands to copy the shared data tarball to exec node
            - writeCopyStagedFiles     Write commands to copy staged data to exec node
            - writeJobCommands         Write the actual execution commands
            - writeSaveOutputCommands  Write commands to save output images
@@ -156,7 +152,7 @@ class SingleChipScriptGenerator(AbstractScriptGenerator):
 
         self.writeHeader(jobFileName, wuID, cid, expid, visitLogPath)
         self.writeSetupExecDirs(jobFileName, wuID)
-        self.writeCopySharedData(jobFileName, wuID, True, True)
+        self.writeSetupSharedData(jobFileName, wuID, True, True)
         self.writeCopyStagedFiles(jobFileName, wuID, cid, expid, raytraceParFile,
                                  backgroundParFile, cosmicParFile, trimcatalogParFile)
         self.writeJobCommands(jobFileName, wuID, cid, id, expid)
@@ -232,8 +228,8 @@ class SingleChipScriptGenerator(AbstractScriptGenerator):
                 #
                 # Set the soft link to the catalog directory
                 #
-                jobFile.write('echo Setting soft link to data directory. \n')
-                jobFile.write('ln -s %s data \n' % self.scratchSharedPath)
+                #jobFile.write('echo Setting soft link to data directory. \n')
+                #jobFile.write('ln -s %s data \n' % self.scratchSharedPath)
                 #
                 # Create the scratch output directory
                 #
