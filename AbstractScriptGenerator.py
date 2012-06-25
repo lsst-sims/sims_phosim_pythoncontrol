@@ -116,6 +116,7 @@ class AbstractScriptGenerator:
            scratchSharedPath: Directory into which to untar the tarball
            dataCheckDir:      If this directory exists inside scratchSharedPath,
                               do no bother staging tarball.
+        TODO(gardner): Use different lock files for FP vs. SED?
         """
         # Make sure your shared directory on the compute node exists
         cshOut.write('if ( ! -d %s ) then \n' %(scratchSharedPath))
@@ -175,7 +176,7 @@ class AbstractScriptGenerator:
                 cshOut.write('cd %s\n' %execDataPath)
                 if needFP:
                     if self.policy.getboolean('general', 'useSharedFP') == False:
-                        scratchDataPath = self.policy.get('general','scratchDataPathFP')
+                        scratchDataPath = self.policy.get('general','scratchDataPath')
                         # writeCopyDataTarball() will check the existence of
                         # 'focal_plane/sta_misalignments/qe_maps' to determine if it
                         # needs to grab and untar self.tarball.
@@ -186,12 +187,13 @@ class AbstractScriptGenerator:
                                                    'focal_plane/sta_misalignments/qe_maps')
                     else:
                         scratchDataPath = self.policy.get('general','dataPathFP')
+                    cshOut.write('cd %s\n' %execDataPath)
                     cshOut.write('echo Setting soft link to focal_plane directory. \n')
                     cshOut.write('ln -s %s focal_plane\n' %os.path.join(scratchDataPath,
                                                                         'focal_plane'))
                 if needSEDs:
                     if self.policy.getboolean('general', 'useSharedSEDs') == False:
-                        scratchDataPath = self.policy.get('general','scratchDataPathSEDs')
+                        scratchDataPath = self.policy.get('general','scratchDataPath')
                         # writeCopyDataTarball() will check the existence of
                         # 'starSED/gizisSED' to determine if it
                         # needs to grab and untar self.tarball.
@@ -202,6 +204,7 @@ class AbstractScriptGenerator:
                                                    'starSED/gizis_SED')
                     else:
                         scratchDataPath = self.policy.get('general','dataPathSEDs')
+                    cshOut.write('cd %s\n' %execDataPath)
                     cshOut.write('echo Setting soft link to SED data directories. \n')
                     cshOut.write('ln -s %s agnSED\n' %os.path.join(scratchDataPath,
                                                                  'agnSED'))

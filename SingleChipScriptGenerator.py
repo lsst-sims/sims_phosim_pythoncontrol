@@ -79,13 +79,6 @@ class SingleChipScriptGenerator(AbstractScriptGenerator):
         self.pythonExec = self.policy.get('general','python-exec')
         # Shared data locations
         #self.imsimDataPath = os.getenv("CAT_SHARE_DATA")
-        self.imsimDataPath = self.policy.get('general','dataPathSEDs')
-        self.useSharedData = self.policy.getboolean('general','useSharedSEDs')
-        self.tarball = self.policy.get('general','dataTarballSEDs')
-        if self.useSharedData == True:
-          self.scratchSharedPath = self.imsimDataPath
-        else:
-          self.scratchSharedPath = self.policy.get('general','scratchDataPathSEDs')
         # Directories and filenames
         self.savePath  = self.policy.get('general','savePath')
         self.scratchPath = self.policy.get('general','scratchExecPath')
