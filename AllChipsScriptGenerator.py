@@ -303,19 +303,19 @@ class AllChipsScriptGenerator:
         return
 
 
-    def makeScripts(self, extraidFile, idonly=""):
+    def makeScripts(self, idonly=""):
         """This is the main public method for this class.
         It generates all of the scripts for performing the raytracing
         phase on each chip (really, each exposure for each chip).
         It is comprised of the following 4 stages.
         """
-        self._setupScriptEnvironment(extraidFile, idonly)
+        self._setupScriptEnvironment(idonly)
         wav = self._runPreprocessingCommands()
         self._generateScripts(wav)
         self._stageAndCleanupFiles()
         return
         
-    def _setupScriptEnvironment(self, extraidFile, idonly):
+    def _setupScriptEnvironment(self, idonly):
         """Configures the necessary variables and directories
         for generating the scripts for the raytracing phase.
         """

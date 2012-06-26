@@ -27,7 +27,7 @@ def verifyFileExistence(missingList, path, filename):
 
 def verifyFitsContents(corruptList, path, filename):
     fullpath = os.path.join(path, filename)
-    p = subprocess.Popen("fitsverify -q -e %s"%fullpath, shell=True,
+    p = subprocess.Popen("./fitsverify -q -e %s"%fullpath, shell=True,
                               stdout=subprocess.PIPE, close_fds=True)
     output = p.stdout.readlines()[0]
     p.stdout.close()
