@@ -27,8 +27,15 @@ def verifyFileExistence(missingList, path, filename):
 
 def verifyFitsContents(corruptList, path, filename):
     fullpath = os.path.join(path, filename)
-    p = subprocess.Popen("./fitsverify -q -e %s"%fullpath, shell=True,
-                              stdout=subprocess.PIPE, close_fds=True)
+    # If the fitsverify executable is in the cwd, use that. Otherwise,
+    # use the copy in the path.  This is necessary in case the cwd
+    # is not in the path.
+    if os.path.isfile("fitsverify"):
+        cmd = "./fitsverify"
+    else:
+        cmd = "fitsverify"
+    p = subprocess.Popen("%s -q -e %s"%(cmd, fullpath), shell=True,
+                         stdout=subprocess.PIPE, close_fds=True)
     output = p.stdout.readlines()[0]
     p.stdout.close()
     if output.startswith("verification OK"):
