@@ -93,8 +93,8 @@ class SingleVisitScriptGenerator(AbstractScriptGenerator):
     def jobFileName(self, obshistid, filt):
         return '%s_f%s.csh' %(obshistid, filt)
 
-    def makeScript(self, obsHistID, origObsHistID, trimfileName, trimfileBasename, trimfilePath,
-                   filterName, filterNum, visitDir, visitLogPath):
+    def makeScript(self, obsHistID, origObsHistID, trimfileName, trimfileBasename,
+                   trimfilePath, filterName, filterNum, visitDir, visitLogPath):
         """
         This creates a script to do the pre-processing for each visit.
 
@@ -121,7 +121,6 @@ class SingleVisitScriptGenerator(AbstractScriptGenerator):
         print 'scriptFileName:', scriptFileName
         if os.path.isfile(scriptFileName):
             os.remove(scriptFileName)
-
 
         self.writeHeader(scriptFileName, visitDir, filterName, obsHistID, visitLogPath)
         self.writeSetupExecDirs(scriptFileName, visitDir)
@@ -193,15 +192,19 @@ class SingleVisitScriptGenerator(AbstractScriptGenerator):
                 #
                 # Copy source, exec, and control files from staging
                 #
-                cshOut.write('echo Copying and untarring %s to %s\n' %(self.sourceFileTgzName, visitPath))
-                cshOut.write('cp %s . \n' %(os.path.join(stagePath, self.sourceFileTgzName)))
+                cshOut.write('echo Copying and untarring %s to %s\n'
+                             %(self.sourceFileTgzName, visitPath))
+                cshOut.write('cp %s . \n' %(os.path.join(stagePath,
+                                                         self.sourceFileTgzName)))
                 cshOut.write('tar xzvf %s \n' %(self.sourceFileTgzName))
                 cshOut.write('rm %s \n' %(self.sourceFileTgzName))
-                cshOut.write('echo Copying and untarring %s to %s\n' %(self.execFileTgzName, visitPath))
+                cshOut.write('echo Copying and untarring %s to %s\n'
+                             %(self.execFileTgzName, visitPath))
                 cshOut.write('cp %s . \n' %(os.path.join(stagePath, self.execFileTgzName)))
                 cshOut.write('tar xzvf %s \n' %(self.execFileTgzName))
                 cshOut.write('rm %s \n' %(self.execFileTgzName))
-                cshOut.write('echo Copying and untarring %s to %s\n' %(self.controlFileTgzName, visitPath))
+                cshOut.write('echo Copying and untarring %s to %s\n'
+                             %(self.controlFileTgzName, visitPath))
                 cshOut.write('cp %s . \n' %(os.path.join(stagePath, self.controlFileTgzName)))
                 cshOut.write('tar xzvf %s \n' %(self.controlFileTgzName))
                 cshOut.write('rm %s \n' %(self.controlFileTgzName))
@@ -240,7 +243,8 @@ class SingleVisitScriptGenerator(AbstractScriptGenerator):
                 cshOut.write('echo Running fullFocalplane.py with %s. \n' %(self.extraIdFile))
                 cshOut.write('which %s\n' %(self.pythonExec))
                 cshOut.write("time %s fullFocalplane.py %s %s %s\n"
-                             %(self.pythonExec, trimfileBasename, self.imsimConfigFile, self.extraIdFile))
+                             %(self.pythonExec, trimfileBasename, self.imsimConfigFile,
+                               self.extraIdFile))
                 cmd = '%s verifyFiles.py --stage=raytrace_input --output=verify.out %s %s %s' \
                       %(self.pythonExec, obshistid, filterName, self.stagePath2)
                 cshOut.write('echo Verifying output files: %s\n' %cmd)
@@ -248,7 +252,8 @@ class SingleVisitScriptGenerator(AbstractScriptGenerator):
                 jobsManifestFilename = generateRaytraceJobManifestFilename(obshistid, filterName)
                 cshOut.write("if ($status) then\n")
                 cshOut.write("  echo Error in verifyFiles.py!\n")
-                cshOut.write("  cp verify.out %s\n" %os.path.join(self.stagePath2, jobsManifestFilename))
+                cshOut.write("  cp verify.out %s\n" %os.path.join(self.stagePath2,
+                                                                  jobsManifestFilename))
                 cshOut.write("else\n")
                 cshOut.write("  echo Output file verification completed with no errors.\n")
                 cshOut.write('  cp %s %s \n'%(jobsManifestFilename, self.stagePath2))
@@ -309,10 +314,12 @@ class SingleVisitScriptGenerator(AbstractScriptGenerator):
             print 'Staging directory', trimfileStagePath, 'already exists...'
             print '...Assuming trimfile is already present.'
 
-        self._writePreprocScriptManifest(preprocScriptManifest, scriptFileName, stagePath, visitLogPath)
+        self._writePreprocScriptManifest(preprocScriptManifest, scriptFileName,
+                                         stagePath, visitLogPath)
         return
 
-    def _writePreprocScriptManifest(self, preprocScriptManifest, scriptFileName, stagePath, visitLogPath):
+    def _writePreprocScriptManifest(self, preprocScriptManifest, scriptFileName,
+                                    stagePath, visitLogPath):
         # Generate the list of job scripts for the ray tracing and post processing
         fileDest = os.path.join(stagePath, os.path.basename(scriptFileName))
         cmd = 'csh'
@@ -331,15 +338,16 @@ class SingleVisitScriptGenerator(AbstractScriptGenerator):
 
 class SingleVisitScriptGenerator_Pbs(SingleVisitScriptGenerator):
 
-    def __init__(self, scriptInvocationPath, preprocScriptManifest, policy, imsimConfigFile,
-                 extraIdFile, sourceFileTgzName, execFileTgzName, controlFileTgzName,
-                 tmpdir):
+    def __init__(self, scriptInvocationPath, preprocScriptManifest, policy,
+                 imsimConfigFile, extraIdFile, sourceFileTgzName, execFileTgzName,
+                 controlFileTgzName, tmpdir):
         """
         Augment the superclass's constructor to have the PBS 'username' appended to it.
         """
-        SingleVisitScriptGenerator.__init__(self, scriptInvocationPath, preprocScriptManifest, policy,
-                                             imsimConfigFile, extraIdFile, sourceFileTgzName,
-                                            execFileTgzName, controlFileTgzName, tmpdir)
+        SingleVisitScriptGenerator.__init__(self, scriptInvocationPath, preprocScriptManifest,
+                                            policy, imsimConfigFile, extraIdFile,
+                                            sourceFileTgzName, execFileTgzName,
+                                            controlFileTgzName, tmpdir)
         self.username =   self.policy.get('pbs','username')
         self.processors = self.policy.get('general', 'processors')
         self.numNodes =   self.policy.get('general', 'numNodes')

@@ -16,16 +16,112 @@ Notation: For naming the rafts, sensors, amplifiers, and exposures, we
 from __future__ import with_statement
 import os, re, sys
 import subprocess
-import chip
+
+
+def filterToLetter(filterIdNum):
+    """Convert numeric filter ID to alphabetic."""
+    filtmapToLetter = {"0":"u", "1":"g", "2":"r", "3":"i", "4":"z", "5":"y"}
+    return filtmapToLetter[filterIdNum]
+
+
+def filterToNumber(filterIdName):
+    """Convert alphabetic filter ID to numeric."""
+    filtmapToNumber = {"u":"0", "g":"1", "r":"2", "i":"3", "z":"4", "y":"5"}
+    return filtmapToNumber[filterIdName]
+
+
+def findSourceFile(filename):
+    """Locates a file that is in the source tree.
+
+    Searches for the file in both the cwd and in IMSIM_SOURCE_PATH.
+
+    Args:
+      filename:  Should include the relative path of file from these locations,
+                 e.g. 'lsst/segmentation.txt'
+
+    Returns:
+      The full path of the file.
+    """
+    if not os.path.isfile(filename):
+        #print filename, 'does not exist in cwd.  Checking IMSIM_SOURCE_PATH.'
+        imsimSourcePath = os.getenv("IMSIM_SOURCE_PATH")
+        if imsimSourcePath is None:
+            raise NameError('Could not find value for IMSIM_SOURCE_PATH needed to read %s.'
+                            % filename)
+        filename = os.path.join(imsimSourcePath, filename)
+        if not os.path.isfile(filename):
+            raise RuntimeError('Could not %s' %filename)
+    #print 'Found', filename
+    return filename
+
+def idStringsFromFilename(filename):
+    """Determines the obshistid and the full exposure id from filename.
+
+    Filename must be structured as
+    name_<obshistid>_<rafid>_<sourceid>_<expid>.extension
+
+    Args:
+    filename:   Name of the file to parse
+
+    Returns:
+    obshistid:  obshistid
+    id:         full exposure id of the form <raftid>_<sourceid>_<expid>
+    """
+    tokens = filename.split('_')
+    assert len(tokens) == 5
+    obshistid = tokens[1]
+    id = '%s_%s_%s' %(tokens[2], tokens[3], tokens[4].split('.')[0])
+    return obshistid, id
+
+
+def readAmpList(ampFile, cid):
+    """Reads list of amps for a specific chip.
+
+    Args:
+      ampFile:  pointer to file containing amp list
+      cid:      chipid to load
+
+    Return:
+      list of amp names
+    """
+    ampList = []
+    for line in ampFile.readlines():
+        if line.startswith('%s_' %cid):
+            ampList.append(line.split()[0])
+    return ampList
+
 
 def verifyFileExistence(missingList, path, filename):
+    """Verifies the existing of 'path/filename'.
+
+    Args:
+      missingList:  List of missing files to which this file will
+                    be appended if missing.
+      path:         File path not including name.
+      filename:     File name.
+
+    Returns:
+      True if file exists, false otherwise.
+    """
     fullpath = os.path.join(path, filename)
     if not os.path.isfile(fullpath):
         missingList.append(fullpath)
         return False
     return True
 
+
 def verifyFitsContents(corruptList, path, filename):
+    """Runs fitsverify on a FITS file to verify contents.
+
+    Args:
+      corruptList:  A lits of corrupt files to which this file will
+                    be appended if corrupt.
+      path:         File path not including name.
+      filename:     File name.
+
+    Returns:
+      True if fitsverify returns OK, false otherwise.
+    """
     fullpath = os.path.join(path, filename)
     # If the fitsverify executable is in the cwd, use that. Otherwise,
     # use the copy in the path.  This is necessary in case the cwd
@@ -43,28 +139,6 @@ def verifyFitsContents(corruptList, path, filename):
     corruptList.append((fullpath, output))
     return False
 
-def filterToLetter(filterIdNum):
-  filtmapToLetter = {"0":"u", "1":"g", "2":"r", "3":"i", "4":"z", "5":"y"}
-  return filtmapToLetter[filterIdNum]
-
-def filterToNumber(filterIdName):
-  filtmapToNumber = {"u":"0", "g":"1", "r":"2", "i":"3", "z":"4", "y":"5"}
-  return filtmapToNumber[filterIdName]
-
-def idStringsFromFilename(filename):
-  """Returns the obshistid and the full exposure id of any file with a name structured
-  as: name_<obshistid>_<rafid>_<sourceid>_<expid>.extension
-  INPUT:
-      filename:   Name of the file to parse
-  RETURNS:
-      obshistid:  obshistid
-      id:         full exposure id of the form <raftid>_<sourceid>_<expid>
-  """
-  tokens = filename.split('_')
-  assert len(tokens) == 5
-  obshistid = tokens[1]
-  id = '%s_%s_%s' %(tokens[2], tokens[3], tokens[4].split('.')[0])
-  return obshistid, id
 
 class Exposure(object):
     def __init__(self, obshistid, filterid, id):
@@ -91,7 +165,7 @@ class Exposure(object):
         for ampid in self.ampList:
             names.append('imsim_%s_f%s_%s_%s.fits.gz' %(self.obshistid, self.filterNum, ampid, self.expid))
         return names
-    
+
     def generateRawOutputNames(self):
         self._loadAmpList()
         path = "raw/v%08d-f%s/%s/%s/%s" % (int(self.obshistid), self.filterName,
@@ -103,8 +177,8 @@ class Exposure(object):
 
     def _loadAmpList(self):
         if not self.ampList:
-            with open(chip.findSourceFile('lsst/segmentation.txt'), 'r') as ampFile:
-                self.ampList = chip.readAmpList(ampFile, self.cid)
+            with open(findSourceFile('lsst/segmentation.txt'), 'r') as ampFile:
+                self.ampList = readAmpList(ampFile, self.cid)
         assert self.ampList
         return
 

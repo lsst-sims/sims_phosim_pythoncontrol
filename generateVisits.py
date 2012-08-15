@@ -53,8 +53,11 @@ if __name__ == "__main__":
     parser = OptionParser(usage=usage)
     parser.add_option("-s", "--scheduler", dest="scheduler", default="unspecified",
                       help="depricated")
-    #parser.add_option("-v", "--verbose", type="int", dest="verbosity", default=0,
-    #                  help="Level of verbosity. >0 means shell scripts are run with '-x' (default=0)")
+    #regen_atmoscreens = False
+    #parser.add_option("-r", "--regen_atmoscreens", action="store_true",
+    #                  dest="regen_atmoscreens",
+    #                  help="Regenerate atmosphere screens in RAYTRACE stage"
+    #                  "instead of copying them.")
     (options, args) = parser.parse_args()
     if len(args) != 3:
         print "Incorrect number of arguments.  Use -h or --help for help."
@@ -65,11 +68,12 @@ if __name__ == "__main__":
     imsimConfigFile = args[1]
     extraIdFile = args[2]
 
-    print "Called with myfile=%s, imsimConfigFile=%s, extraIdFile=%s" %(myfile, imsimConfigFile, extraIdFile)
+    print ("Called with myfile=%s, imsimConfigFile=%s, extraIdFile=%s"
+           % (myfile, imsimConfigFile, extraIdFile))
 
     if options.scheduler != "unspecified":
-        print "--scheduler command-line option no longer supported.  Use 'scheduler1' and 'scheduler2"
-        print "  in imsimConfigFile."
+        print "--scheduler command-line option no longer supported."
+        print "  Use 'scheduler1' and 'scheduler2 in imsimConfigFile."
         quit()
     # Parse the config file
     policy = ConfigParser.RawConfigParser()
@@ -78,11 +82,14 @@ if __name__ == "__main__":
     scheduler = policy.get('general','scheduler1')
     if scheduler == 'csh':
         print 'Using schedule "csh"'
-        scriptGenerator = AllVisitsScriptGenerator(myfile, policy, imsimConfigFile, extraIdFile)
+        scriptGenerator = AllVisitsScriptGenerator(myfile, policy, imsimConfigFile,
+                                                   extraIdFile)
         scriptGenerator.makeScripts()
     elif scheduler == 'pbs':
         print 'Using schedule "pbs"'
-        scriptGenerator = AllVisitsScriptGenerator_Pbs(myfile, policy, imsimConfigFile, extraIdFile)
+        scriptGenerator = AllVisitsScriptGenerator_Pbs(myfile, policy,
+                                                       imsimConfigFile,
+                                                       extraIdFile)
         scriptGenerator.makeScripts()
     elif scheduler == 'exacycle':
         print "Exacycle functionality not added yet."

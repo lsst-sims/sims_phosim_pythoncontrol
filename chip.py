@@ -10,23 +10,23 @@ Updated: March 29, 2011
 
 Usage:   python chip.py [options]
 Options: obshistid: obshistid of the sensor observation
-         filter: numerical filter designation (u=0,g=1,r=2,i=3,z=4,y=5)
+         filterNum: numerical filter designation (u=0,g=1,r=2,i=3,z=4,y=5)
          rx: raft x value (0, 1, 2, 3, 4)
          ry: raft y value (0, 1, 2, 3, 4)
          sx: sensor x value (0, 1, 2)
          sy: sensor y value (0, 1, 2)
          ex: exposure (snap) value (0, 1)
-         datadir: save directory location for the resulting images  
+         datadir: save directory location for the resulting images
 
 Notes:   On Cluster, must have LSST stack with afw setup.  Can also
          use the stack version of Python.
 
          To run standalone, you must have the following files in your
          working directory, where id=R+rx+ry_S+sx+sy_E00+ex:
-         
+
          trimcatalog_%s_%s.pars' %(obshistid, cid)
          raytracecommands_%s_%s.pars' %(obshistid, id)
-         background_%s_%s.pars' %(obshistid, id) 
+         background_%s_%s.pars' %(obshistid, id)
          cosmic_%s_%s.pars' %(obshistid, id)
          tracking_%s.pars %(obshistid)
          cloudscreen_%s_%s.fits %(obshistid, screen)
@@ -49,68 +49,36 @@ import shutil
 import subprocess
 import string
 import gzip
-import time
-
-class WithTimer:
-    """http://preshing.com/20110924/timing-your-code-using-pythons-with-statement"""
-    def __enter__(self):
-        self.startCpu = time.clock()
-        self.startWall = time.time()
-        return self
-
-    def __exit__(self, *args):
-        self.interval = []
-        self.interval.append(time.clock() - self.startCpu)
-        self.interval.append(time.time() - self.startWall)
-
-    def Print(self, name, stream):
-      stream.write('TIMER[%s]: cpu: %f sec  wall: %f sec\n' %(name, self.interval[0],
-                                                              self.interval[1]))
-
-    def PrintCpu(self, name, stream):
-      stream.write('TIMER[%s]: cpu: %f sec\n' %(name, self.interval[0]))
-
-    def PrintWall(self, name, stream):
-      stream.write('TIMER[%s]: wall: %f sec\n' %(name, self.interval[1]))
+from optparse import OptionParser
+from Exposure import findSourceFile
+from Exposure import readAmpList
+from Focalplane import filterToLetter
+from Focalplane import Focalplane
+from Focalplane import WithTimer
 
 
-def readAmpList(ampFile, cid):
-    ampList = []
-    for line in ampFile.readlines():
-        if line.startswith('%s_' %cid):
-            ampList.append(line.split()[0])
-    return ampList
-
-def findSourceFile(filename):
-    """Looks for a file in both the cwd and in IMSIM_SOURCE_PATH.
-    'filename' should include the relative path from these locations, e.g.
-    'segmentation.txt'
-    """
-    if not os.path.isfile(filename):
-        #print filename, 'does not exist in cwd.  Checking IMSIM_SOURCE_PATH.'
-        imsimSourcePath = os.getenv("IMSIM_SOURCE_PATH")
-        if imsimSourcePath is None:
-            raise NameError('Could not find value for IMSIM_SOURCE_PATH needed to read %s.'
-                            % filename)
-        filename = os.path.join(imsimSourcePath, filename)
-        if not os.path.isfile(filename):
-            raise RuntimeError('Could not %s' %filename)
-    #print 'Found', filename
-    return filename
-
-def makeChipImage(obshistid, filter, cid, expid, datadir):
-
+def makeChipImage(obshistid, filterNum, cid, expid, datadir,
+                  regenAtmoscreens=False, trimfileName=None):
     """
     Create the chip image.
     """
 
+    if regenAtmoscreens:
+        if trimfileName is None:
+            raise RuntimeError('trimfileName must be supplied to regenerate'
+                               ' atmospheric screens.')
+        focalplane = Focalplane(obshistid, filterToLetter(filterNum))
+        focalplane.loadTrimfile(trimfileName)
+        focalplane.generateAtmosphericParams()
+        focalplane.generateAtmosphericScreen()
+        focalplane.generateCloudScreen()
     id = '%s_%s' %(cid, expid)
-    
+
     lsstCmdFile       = 'lsst_%s_%s.pars' %(obshistid, id)
     trimCatFile       = 'trimcatalog_%s_%s.pars.gz' %(obshistid, id)
     raytraceCmdFile   = 'raytracecommands_%s_%s.pars' %(obshistid, id)
-    backgroundParFile = 'background_%s_%s.pars' %(obshistid, id) 
-    cosmicParFile     = 'cosmic_%s_%s.pars' %(obshistid, id)  
+    backgroundParFile = 'background_%s_%s.pars' %(obshistid, id)
+    cosmicParFile     = 'cosmic_%s_%s.pars' %(obshistid, id)
     outputFile        = 'output_%s_%s.fits' %(obshistid, id)
 
     # RUN THE RAYTRACE
@@ -130,7 +98,7 @@ def makeChipImage(obshistid, filter, cid, expid, datadir):
     t.PrintWall('lsst', sys.stderr)
     os.chdir('..')
 
-    eimage = 'eimage_%s_f%s_%s.fits' %(obshistid, filter, id)
+    eimage = 'eimage_%s_f%s_%s.fits' %(obshistid, filterNum, id)
     image = 'imsim_%s_%s.fits' %(obshistid, id)
     shutil.copyfile('raytrace/%s' %(image), '%s/%s' %(datadir, eimage))
 
@@ -194,7 +162,7 @@ def makeChipImage(obshistid, filter, cid, expid, datadir):
     print 'From %s:' %os.getcwd()
     for ampid in ampList:
         imsim = 'imsim_%s_%s_%s.fits' %(obshistid, ampid, expid)
-        imsimFilter = 'imsim_%s_f%s_%s_%s.fits.gz' %(obshistid, filter, ampid, expid)
+        imsimFilter = 'imsim_%s_f%s_%s_%s.fits.gz' %(obshistid, filterNum, ampid, expid)
         cmd = 'gzip %s' % imsim
         subprocess.check_call(cmd, shell=True)
         imsim += '.gz'
@@ -202,9 +170,9 @@ def makeChipImage(obshistid, filter, cid, expid, datadir):
         print '-- Moving', imsim, 'to', target
         shutil.move(imsim, target)
     os.chdir('../..')
-      
+
 ##     os.remove('%s' %(trimCatFile))
-    os.remove('ancillary/cosmic_rays/%s' %(outputFile))            
+    os.remove('ancillary/cosmic_rays/%s' %(outputFile))
     #os.remove('ancillary/cosmic_rays/%s.gz' %(outputFile))
 ##     os.remove('chip_%s_%s.pars' %(obshistid, id))
 ##     os.remove('%s' %(cosmicParFile))
@@ -213,21 +181,32 @@ def makeChipImage(obshistid, filter, cid, expid, datadir):
 ##     os.remove('%s' %(raytraceCmdFile))
 
     print 'chip.py complete.'
-    
+
     return
 
 if __name__ == "__main__":
-    
-    if not len(sys.argv) == 6:
-        print "usage: python chip.py obshistid filterNo cid expid datadir"
+
+    usage = "usage: python chip.py [options] obshistid filterNum cid expid datadir"
+    parser = OptionParser(usage=usage)
+    parser.set_defaults(regen_atmoscreens=False)
+    parser.add_option("-r", "--regen_atmoscreens", action="store_true",
+                      dest="regen_atmoscreens",
+                      help="Regenerate atmosphere screens in RAYTRACE stage"
+                      "instead of copying them.")
+    parser.add_option("-t", "--trimfile", dest="trimfile_name",
+                      help="Name of trimfile.  Required if --regen_atmoscreens=True.")
+    (options, args) = parser.parse_args()
+    if len(args) != 5 or (options.regen_atmoscreens and
+                          options.trimfile_name is None):
+        parser.print_help()
         quit()
-
-    obshistid = sys.argv[1]
-    filter = sys.argv[2]
-    cid = sys.argv[3]
-    expid = sys.argv[4]
-    datadir = sys.argv[5]
-
+    obshistid = args[0]
+    filterNum = args[1]
+    cid = args[2]
+    expid = args[3]
+    datadir = args[4]
     with WithTimer() as t:
-        makeChipImage(obshistid, filter, cid, expid, datadir)
+        makeChipImage(obshistid, filterNum, cid, expid, datadir,
+                      regenAtmoscreens=options.regen_atmoscreens,
+                      trimfileName=options.trimfile_name)
     t.PrintWall('chip.py', sys.stderr)

@@ -53,7 +53,7 @@ class SingleChipScriptGenerator(AbstractScriptGenerator):
     def __init__(self, policy, obshistid, filterName, filterNum, centid, centroidPath,
                  stagePath2, paramDir, trackingParFile):
         """Constructor.
-      
+
         Args:
         policy:      parser object for ImSim config file
         obshistid:   obshistid (includes extraid)
@@ -85,6 +85,7 @@ class SingleChipScriptGenerator(AbstractScriptGenerator):
         self.scratchOutputDir = self.policy.get('general','scratchOutputDir')
         self.debugLevel = self.policy.getint('general','debuglevel')
         self.sleepMax = self.policy.getint('general','sleepmax')
+        self.regenAtmoscreens = self.policy.getboolean('general','regenAtmoscreens')
         # Job monitor database
         self.useDb = self.policy.getboolean('general','useDatabase')
         return
@@ -102,7 +103,7 @@ class SingleChipScriptGenerator(AbstractScriptGenerator):
         return 'exec_%s_%s.csh' %(self.obshistid, id)
 
     def makeScript(self, cid, expid, raytraceParFile, backgroundParFile, cosmicParFile,
-                   trimcatalogParFile, visitLogPath):
+                   trimcatalogParFile, visitLogPath, trimfile):
         """
         Make the script for the job for this CCD.
 
@@ -148,7 +149,7 @@ class SingleChipScriptGenerator(AbstractScriptGenerator):
         self.writeSetupSharedData(jobFileName, wuID, True, True)
         self.writeCopyStagedFiles(jobFileName, wuID, cid, expid, raytraceParFile,
                                  backgroundParFile, cosmicParFile, trimcatalogParFile)
-        self.writeJobCommands(jobFileName, wuID, cid, id, expid)
+        self.writeJobCommands(jobFileName, wuID, cid, id, expid, trimfile)
         self.writeSaveOutputCommands(jobFileName, wuID, cid, expid, visitLogPath)
         self.writeCleanupCommands(jobFileName, wuID, cid, expid)
 
@@ -184,6 +185,7 @@ class SingleChipScriptGenerator(AbstractScriptGenerator):
             print "Could not open %s to write header info in writeHeader()" %(jobFileName)
             sys.exit()
 
+
     def writeCopyStagedFiles(self, jobFileName, wuID, cid, expid, raytraceParFile,
                              backgroundParFile, cosmicParFile, trimcatalogParFile):
 
@@ -212,12 +214,17 @@ class SingleChipScriptGenerator(AbstractScriptGenerator):
                 #
                 # Copy files needed for the specific run (in nodefiles*.tar.gz)
                 #
-                jobFile.write('cp %s/nodeFiles%s.tar.gz %s/ \n' %(self.stagePath2, self.obshistid, wuPath))
-                # cd to the scratch exec dir (where all of the exec and param files are stored
-                # for this work unit).
+                jobFile.write('cp %s/nodeFiles%s.tar.gz %s/ \n'
+                              %(self.stagePath2, self.obshistid, wuPath))
+                jobFile.write('cp %s/nodeFilesExec%s.tar.gz %s/ \n'
+                              %(self.stagePath2, self.obshistid, wuPath))
+                # cd to the scratch exec dir (where all of the exec and param files
+                # are stored for this work unit).
                 jobFile.write('cd %s \n' %(wuPath))
                 jobFile.write('tar xzf nodeFiles%s.tar.gz \n' %(self.obshistid))
                 jobFile.write('rm nodeFiles%s.tar.gz \n' %(self.obshistid))
+                jobFile.write('tar xzf nodeFilesExec%s.tar.gz \n' %(self.obshistid))
+                jobFile.write('rm nodeFilesExec%s.tar.gz \n' %(self.obshistid))
                 #
                 # Set the soft link to the catalog directory
                 #
@@ -234,24 +241,26 @@ class SingleChipScriptGenerator(AbstractScriptGenerator):
                 #jobFile.write('cd $PBS_O_WORKDIR \n')
                 jobFile.write('echo Copying files needed for LSST stage. \n')
                 jobFile.write('cp %s/%s %s/%s %s/%s %s/ \n'
-                              %(self.paramDir, trimcatalogParFile, self.paramDir, raytraceParFile,
-                                self.paramDir, self.trackingParFile, wuPath))
+                              % (self.paramDir, trimcatalogParFile, self.paramDir,
+                                 raytraceParFile, self.paramDir, self.trackingParFile,
+                                 wuPath))
                 jobFile.write('echo Copying file needed for BACKGROUND stage. \n')
-                jobFile.write('cp %s/%s %s/ \n' %(self.paramDir, backgroundParFile, wuPath))
+                jobFile.write('cp %s/%s %s/ \n'
+                              % (self.paramDir, backgroundParFile, wuPath))
                 jobFile.write('echo Copying file needed for COSMIC RAY stage. \n')
                 jobFile.write('cp %s/%s %s/ \n' %(self.paramDir, cosmicParFile, wuPath))
                 jobFile.write('echo Copying files needed for E2ADC stage. \n')
-                jobFile.write('cp %s/e2adc_%s_%s_*.pars %s/ \n' %(self.paramDir, self.obshistid, cid, wuPath))
+                jobFile.write('cp %s/e2adc_%s_%s_*.pars %s/ \n'
+                              % (self.paramDir, self.obshistid, cid, wuPath))
 
         except IOError:
-            print "Could not open %s for writing script in writejobCommands" %(jobFileName)
+            print ('Could not open %s for writing script in writeCopyStagedFiles'
+                   % (jobFileName))
             sys.exit()
         return
 
 
-
-
-    def writeJobCommands(self, jobFileName, wuID, cid, id, expid):
+    def writeJobCommands(self, jobFileName, wuID, cid, id, expid, trimfile):
 
         """
         Add the commands to the script that actually do the work.
@@ -267,30 +276,37 @@ class SingleChipScriptGenerator(AbstractScriptGenerator):
                 print >>jobFile, "### ---------------------------------------"
                 print >>jobFile, " "
                 jobFile.write('cd %s \n' %(wuPath))
-                jobFile.write('echo Running: chip.py %s %s %s %s %s \n'
-                              %(self.obshistid, self.filterNum, cid, expid, self.scratchOutputDir))
-                jobFile.write('time %s chip.py %s %s %s %s %s \n'
-                              %(self.pythonExec, self.obshistid, self.filterNum, cid, expid,
-                                self.scratchOutputDir))
+                cmd = 'time %s chip.py' % self.pythonExec
+                if self.regenAtmoscreens:
+                  cmd += ' --regen_atmoscreens --trimfile=%s' % trimfile
+                cmd += ' %s %s %s %s %s' % (self.obshistid, self.filterNum, cid,
+                                            expid, self.scratchOutputDir)
+                jobFile.write('echo Running: %s\n' % cmd)
+                jobFile.write('%s\n' % cmd)
                 fnError = generateVerifyErrorFilename(id)
                 fnVerified = generateVerifyFilename(id)
-                cmd = '%s verifyFiles.py --stage=raytrace_exec --output=%s --idlist=%s %s %s %s' \
-                      %(self.pythonExec, fnError, id, self.obshistid,
-                        self.filterName, self.scratchOutputDir)
+                cmd = ('%s verifyFiles.py --stage=raytrace_exec --output=%s'
+                       ' --idlist=%s %s %s %s'
+                       % (self.pythonExec, fnError, id, self.obshistid,
+                          self.filterName, self.scratchOutputDir))
                 jobFile.write('echo Verifying output files: %s\n' %cmd)
                 jobFile.write('time %s\n' %cmd);
                 jobFile.write("if ($status) then\n")
-                jobFile.write("  echo Error in verifyFiles.py!  Output written to %s\n" % fnError)
+                jobFile.write("  echo Error in verifyFiles.py!  Output written to %s\n"
+                              % fnError)
                 jobFile.write("else\n")
                 jobFile.write("  echo Output files successfully verified.\n")
-                jobFile.write("  touch %s\n" %fnVerified)
+                jobFile.write("  touch %s\n" % fnVerified)
                 jobFile.write("endif\n")
                 if self.centid == '1':
-                    jobFile.write('echo Copying centroid file to %s \n' %(self.centroidPath))
-                    jobFile.write('cp raytrace/centroid_imsim_%s_%s.txt %s \n' %(self.obshistid, id, self.centroidPath))
+                    jobFile.write('echo Copying centroid file to %s \n'
+                                  % (self.centroidPath))
+                    jobFile.write('cp raytrace/centroid_imsim_%s_%s.txt %s \n'
+                                  % (self.obshistid, id, self.centroidPath))
 
         except IOError:
-            print "Could not open %s for writing script in writejobCommands" %(jobFileName)
+            print ('Could not open %s for writing script in writejobCommands'
+                   % (jobFileName))
             sys.exit()
         return
 
@@ -307,16 +323,18 @@ class SingleChipScriptGenerator(AbstractScriptGenerator):
         cleanup script is invoked.
 
         """
-
-        # Absolute path to output files on exec node = /"scratchPath"/wuID/"scratchOutputDir"
-        scratchOutputPath = os.path.join(self.scratchPath, wuID, self.scratchOutputDir)
+        # Absolute path to output files on exec node =
+        #   /"scratchPath"/wuID/"scratchOutputDir"
+        scratchOutputPath = os.path.join(self.scratchPath, wuID,
+                                         self.scratchOutputDir)
 
         id = "%s_%s" %(cid, expid)
 
         try:
             jobOut = open(jobFileName, 'a')
         except IOError:
-            print "Could not open %s for writing in writeSaveOutputCommands()" %(jobFileName)
+            print ('Could not open %s for writing in writeSaveOutputCommands()'
+                   % (jobFileName))
             sys.exit()
 
         print >>jobOut, "### ---------------------------------------"
@@ -328,23 +346,26 @@ class SingleChipScriptGenerator(AbstractScriptGenerator):
         fnVerified = generateVerifyFilename(id)
         jobOut.write("if ( -e %s) then\n" %fnVerified)
         jobOut.write("  cp %s %s\n" %(fnVerified, visitLogPath))
-        print >>jobOut, "  echo scratchPath: %s  wuID: %s  scratchOutputDir: %s" %(self.scratchPath, wuID, self.scratchOutputDir)
-        print >>jobOut, "  echo Now moving %s/%s" %(scratchOutputPath, eimage)
-        #print >>jobOut, "  echo calling python pbs/distributeFiles.py %s %s/%s/%s/%s %s" %(transferPath, scratchpartition, nodedir, nodeDatadir, eimage, baseName)
-        #print >>jobOut, "  python pbs/distributeFiles.py %s %s/%s/%s/%s %s" %(transferPath, scratchpartition, nodedir, nodeDatadir, eimage, baseName)
-        print >>jobOut, "  echo calling %s pbs/distributeFiles.py %s %s/%s %s" %(self.pythonExec, self.savePath,
-                                                                               scratchOutputPath, eimage, baseName)
-        print >>jobOut, "  %s pbs/distributeFiles.py %s %s/%s %s" %(self.pythonExec, self.savePath,
-                                                                  scratchOutputPath, eimage, baseName)
-
+        jobOut.write("  echo scratchPath: %s  wuID: %s  scratchOutputDir: %s\n"
+                     % (self.scratchPath, wuID, self.scratchOutputDir))
+        jobOut.write("  echo Now moving %s/%s\n" %(scratchOutputPath, eimage))
+        jobOut.write("  echo calling %s pbs/distributeFiles.py %s %s/%s %s\n"
+                     % (self.pythonExec, self.savePath, scratchOutputPath,
+                        eimage, baseName))
+        jobOut.write("  %s pbs/distributeFiles.py %s %s/%s %s\n"
+                     %(self.pythonExec, self.savePath, scratchOutputPath,
+                       eimage, baseName))
         imageNames = self.exposure.generateRawExecNames()
         baseName = 'imsim'
         for image in imageNames:
-            print >>jobOut, "  echo Now moving %s/%s" %(scratchOutputPath, image)
-            print >>jobOut, "  echo calling %s pbs/distributeFiles.py %s %s/%s %s" %(self.pythonExec, self.savePath, scratchOutputPath, image, baseName)
-            print >>jobOut, "  %s pbs/distributeFiles.py %s %s/%s %s" %(self.pythonExec, self.savePath, scratchOutputPath, image, baseName)
-
-        print >>jobOut, "  echo Moved %s files to %s/" %(self.obshistid, self.savePath)
+            jobOut.write("  echo Now moving %s/%s\n" %(scratchOutputPath, image))
+            jobOut.write("  echo calling %s pbs/distributeFiles.py %s %s/%s %s\n"
+                         % (self.pythonExec, self.savePath, scratchOutputPath,
+                            image, baseName))
+            jobOut.write("  %s pbs/distributeFiles.py %s %s/%s %s\n"
+                         %(self.pythonExec, self.savePath, scratchOutputPath,
+                           image, baseName))
+        jobOut.write("  echo Moved %s files to %s/\n" %(self.obshistid, self.savePath))
         jobOut.write("else\n")
         jobOut.write("  cp %s %s\n" %(generateVerifyErrorFilename(id), visitLogPath))
         jobOut.write("endif\n")
@@ -357,12 +378,11 @@ class SingleChipScriptGenerator(AbstractScriptGenerator):
         Be a good boy/girl and clean up after yourself.
 
         """
-        #tempHist, rNum, sNum, eNumber = wuID.split('_')
-        #obshistid = re.sub('%s/' %(self.username),'', tempHist)
         try:
             jobOut = open(jobFileName, 'a')
         except IOError:
-            print "Could not open %s for writing cleanup commands for script" %(jobFileName)
+            print ('Could not open %s for writing cleanup commands for script'
+                   % (jobFileName))
             sys.exit()
         print >>jobOut, "### ---------------------------------------"
         print >>jobOut, "### DELETE the local node directories and all files."
@@ -381,7 +401,6 @@ class SingleChipScriptGenerator(AbstractScriptGenerator):
 
 
 
-
 class SingleChipScriptGenerator_Pbs(SingleChipScriptGenerator):
     """
     This is the PBS-specific class derived from the SingleChipScriptGenerator.
@@ -393,10 +412,10 @@ class SingleChipScriptGenerator_Pbs(SingleChipScriptGenerator):
     master class.
     """
 
-    def __init__(self, policy, obshistid, filterName, filterNum, centid, centroidPath,
-                 stagePath2, paramDir, trackingParFile):
-        SingleChipScriptGenerator.__init__(self, policy, obshistid, filterName, filterNum,
-                                           centid, centroidPath, stagePath2,
+    def __init__(self, policy, obshistid, filterName, filterNum, centid,
+                 centroidPath, stagePath2, paramDir, trackingParFile):
+        SingleChipScriptGenerator.__init__(self, policy, obshistid, filterName,
+                                           filterNum, centid, centroidPath, stagePath2,
                                            paramDir, trackingParFile)
 
         self.username = self.policy.get('pbs','username')
@@ -419,7 +438,7 @@ class SingleChipScriptGenerator_Pbs(SingleChipScriptGenerator):
 
         jobFile.write('cd $PBS_O_WORKDIR \n')
         jobFile.write('echo Using Job Monitor Database. \n')
-        jobFile.write('echo Setting up LSST throughputs and catalogs_generation packages. \n')
+        jobFile.write('echo Setting up LSST throughputs and catalogs_generation packages.\n')
         jobFile.write('setup pex_policy \n')
         jobFile.write('setup pex_exceptions \n')
         jobFile.write('setup pex_logging \n')
@@ -430,8 +449,9 @@ class SingleChipScriptGenerator_Pbs(SingleChipScriptGenerator):
         jobFile.write('setup pyfits \n')
         jobFile.write('unsetup numpy \n')
         jobFile.write('setup python \n')
-        jobFile.write('python %s/python/lsst/sims/catalogs/generation/jobAllocator/myJobTracker.py %s running %s %s\n'%(self.catGenPath, self.obshistid, sensorId, self.username))
-        #jobFile.write('python %s/python/lsst/sims/catalogs/generation/jobAllocator/myJobTracker.py %s running %s %s\n'%(self.catGenPath, self.obshistid, sensorId, self.username, self.filter))
+        jobFile.write('python %s/python/lsst/sims/catalogs/generation/jobAllocator/myJobTracker.py'
+                      '%s running %s %s\n' % (self.catGenPath, self.obshistid,
+                                              sensorId, self.username))
         jobFile.write('echo Updated the jobAllocator database with key: RUNNING. \n')
         return
 
@@ -440,8 +460,8 @@ class SingleChipScriptGenerator_Pbs(SingleChipScriptGenerator):
         catGenPath = self.policy.get('lsst','catGen')
         print >>jobOut, "cd $PBS_O_WORKDIR"
         try:
-            #print >>jobOut, "  python %s/python/lsst/sims/catalogs/generation/jobAllocator/myJobTracker.py %s finished %s %s" %(catGenPath, obshistid, sensorid, username, filter)
-            print >>jobOut, "  python %s/python/lsst/sims/catalogs/generation/jobAllocator/myJobTracker.py %s finished %s %s" %(catGenPath, obshistid, sensorid, self.username)
+            jobOut.write('  python %s/python/lsst/sims/catalogs/generation/jobAllocator/myJobTracker.py'
+                         ' %s finished %s %s\n' %(catGenPath, obshistid, sensorid, self.username))
             print >>jobOut, "  echo Updated the jobAllocator database with key: FINISHED"
         except OSError:
             print OSError
@@ -564,7 +584,6 @@ class SingleChipScriptGenerator_Pbs(SingleChipScriptGenerator):
         if wuID != None:
             print >>pbsout, "echo The directory in which this job will run is %s" %(wuPath)
         else:
-            #print >>pbsout, "echo No local node directory was indicated - job will run in `echo $PBS_O_WORKDIR`"
             print 'ERROR: You must specify a remote execution directory!'
             quit()
         print >>pbsout, "echo This job is running on `echo $num_procs` processors"
@@ -614,9 +633,18 @@ class SingleChipScriptGenerator_Pbs(SingleChipScriptGenerator):
         print >>pbsout, "set sensorid = %s" %(sensorid)
         print >>pbsout, "set username = %s" %(self.username)
         if self.useDb == True:
-            print >>pbsout, "set minerva0_command = 'cd %s; /opt/torque/bin/qsub -N clean.%s -W depend=afternotok:'$pbs_job_id'  pbs/cleanup_error.csh -v CLEAN_MASTER_NODE_ID='$master_node_id',CLEAN_LOCAL_SCRATCH_DIR='$local_scratch_dir',OBSHISTID='$obshistid',SENSORID='$sensorid',CAT_GEN='$cat_gen',USERNAME='$username" %(imsimSourcePath, wuID)
+            pbsout.write("set minerva0_command = 'cd %s; /opt/torque/bin/qsub -N clean.%s"
+                         " -W depend=afternotok:'$pbs_job_id'"
+                         " pbs/cleanup_error.csh -v CLEAN_MASTER_NODE_ID='$master_node_id',"
+                         "CLEAN_LOCAL_SCRATCH_DIR='$local_scratch_dir',OBSHISTID='$obshistid',"
+                         "SENSORID='$sensorid',CAT_GEN='$cat_gen',USERNAME='$username\n"
+                         % (imsimSourcePath, wuID))
         else:
-            print >>pbsout, "set minerva0_command = 'cd %s; /opt/torque/bin/qsub -N clean.%s -W depend=afternotok:'$pbs_job_id'  pbs/cleanup_files.csh -v CLEAN_MASTER_NODE_ID='$master_node_id',CLEAN_LOCAL_SCRATCH_DIR='$local_scratch_dir" %(imsimSourcePath, wuID)
+            print pbsout.write("set minerva0_command = 'cd %s; /opt/torque/bin/qsub -N clean.%s"
+                               " -W depend=afternotok:'$pbs_job_id'"
+                               " pbs/cleanup_files.csh -v CLEAN_MASTER_NODE_ID='$master_node_id',"
+                               "CLEAN_LOCAL_SCRATCH_DIR='$local_scratch_dir\n"
+                               %(imsimSourcePath, wuID))
         print >>pbsout, "echo $minerva0_command"
         print >>pbsout, "#set pbs_output = `ssh minerva0 $minerva0_command`"
         print >>pbsout, "#set cleanup_job_id = `echo $pbs_output | awk -F. '{print $1}'`"

@@ -122,8 +122,8 @@ class AllVisitsScriptGenerator:
         self.tarControlFiles()
         # SingleVisitScriptGenerator can be instantiated only once per execution environment,
         # So initialize it here, then call the makeScript() in the loop over trim files.
-        scriptGen = SingleVisitScriptGenerator(self.scriptInvocationPath, preprocScriptManifest, self.policy,
-                                               self.imsimConfigFile, self.extraIdFile,
+        scriptGen = SingleVisitScriptGenerator(self.scriptInvocationPath, preprocScriptManifest,
+                                               self.policy, self.imsimConfigFile, self.extraIdFile,
                                                self.sourceFileTgzName, self.execFileTgzName,
                                                self.controlFileTgzName, self.tmpdir)
 
@@ -155,7 +155,8 @@ class AllVisitsScriptGenerator:
 
         ono = list(obshistid)
         if len(ono) > 8:
-            origObshistid = '%s%s%s%s%s%s%s%s' %(ono[0], ono[1], ono[2], ono[3], ono[4],ono[5], ono[6], ono[7])
+            origObshistid = '%s%s%s%s%s%s%s%s' %(ono[0], ono[1], ono[2], ono[3],
+                                                 ono[4],ono[5], ono[6], ono[7])
         else:
             origObshistid = obshistid
 
@@ -173,7 +174,6 @@ class AllVisitsScriptGenerator:
         self.checkVisitDirectories(visitSavePath, visitLogPath, visitParamDir, trimfileStagePath)
         scriptGen.makeScript(obshistid, origObshistid, trimfileName, trimfileBasename,
                              trimfilePath, filterName, filterNum, visitDir, visitLogPath)
-        #self.scriptWriter(trimfileName, trimfileBasename, trimfilePath, filterName, filterNum, obshistid, origObshistid)
         return visitDir
 
     def checkDirectories(self, preprocScriptManifest):
@@ -234,10 +234,6 @@ class AllVisitsScriptGenerator:
         """
         self.sourceFileTgzName = 'imsimSourceFiles.tar.gz'
         os.chdir(self.imsimSourcePath)
-        #cmd = 'tar czvf %s ancillary/atmosphere_parameters/* ancillary/atmosphere/cloud ancillary/atmosphere/turb2d ancillary/optics_parameters/optics_parameters ancillary/optics_parameters/control ancillary/trim/trim ancillary/Add_Background/add_background ancillary/Add_Background/filter_constants* ancillary/Add_Background/fits_files ancillary/Add_Background/SEDs/*.txt ancillary/Add_Background/update_filter_constants ancillary/Add_Background/vignetting_*.txt ancillary/cosmic_rays/create_rays ancillary/cosmic_rays/iray_textfiles/iray* ancillary/e2adc/e2adc ancillary/tracking/tracking raytrace/lsst raytrace/*.txt raytrace/version raytrace/setup pbs/distributeFiles.py' %(self.execFileTgzName)
-        # Got rid of raytrace/setup:
-        #cmd = 'tar czvf %s ancillary/atmosphere_parameters/* ancillary/atmosphere/cloud ancillary/atmosphere/turb2d ancillary/optics_parameters/optics_parameters ancillary/optics_parameters/control ancillary/trim/trim ancillary/Add_Background/add_background ancillary/Add_Background/filter_constants* ancillary/Add_Background/fits_files ancillary/Add_Background/SEDs/*.txt ancillary/Add_Background/update_filter_constants ancillary/Add_Background/vignetting_*.txt ancillary/cosmic_rays/create_rays ancillary/cosmic_rays/iray_textfiles/iray* ancillary/e2adc/e2adc ancillary/tracking/tracking raytrace/lsst raytrace/*.txt raytrace/version pbs/distributeFiles.py' %(self.execFileTgzName)
-        # Moved exec files out of this tar file.
         cmd =  'tar czf %s' % os.path.join(self.tmpdir, self.sourceFileTgzName)
         cmd += ' lsst/*.txt ancillary/atmosphere_parameters/*.txt'
         cmd += ' ancillary/Add_Background/filter_constants* ancillary/Add_Background/fits_files'
@@ -265,18 +261,6 @@ class AllVisitsScriptGenerator:
         cmd = 'tar czf %s ancillary/atmosphere_parameters/create_atmosphere ancillary/atmosphere/cloud ancillary/atmosphere/turb2d ancillary/optics_parameters/optics_parameters ancillary/trim/trim ancillary/Add_Background/add_background ancillary/Add_Background/update_filter_constants ancillary/cosmic_rays/create_rays ancillary/e2adc/e2adc ancillary/tracking/tracking raytrace/lsst' % os.path.join(self.tmpdir, self.execFileTgzName)
         print 'Tarring all exec files.'
         subprocess.check_call(cmd, shell=True)
-
-        # Zip the tar file.
-        #print 'Gzipping %s file' %(self.execFileTgzName)
-        #cmd = 'gzip %s' %(self.execFileTgzName)
-        #subprocess.check_call(cmd, shell=True)
-        #self.execFileTgzName = self.execFileTgzName + '.gz'
-
-        # Move the tarball to the invocation directory to minimize the time spent
-        # in the source dir.
-        #shutil.copy(self.execFileTgzName, self.scriptInvocationPath)
-        #os.remove(self.execFileTgzName)
-        # cd back to the invocation directory
         os.chdir(self.scriptInvocationPath)
         return
 
