@@ -5,11 +5,12 @@ from AllChipsScriptGenerator import *
 from optparse import OptionParser
 
 class MockAllChipsScriptGenerator(AllChipsScriptGenerator):
-  def _readTrimfilesAndCalculateParams(self):
-    self.camconfig = 1
-    self.camstr = 'Group0'
-    self.obshistid = '123456'
-    self.filt = '2'
+  def _loadFocalplaneNames(self, extraidFile, extraid, centid):
+    self.obshistid = '1234560'
+    self.filterNum = '2'
+    self.filterName = filterToLetter(self.filterNum)
+    self.extraid = '0'
+    self.centid = centid
     return
 
   def _makePaths(self):
@@ -17,11 +18,12 @@ class MockAllChipsScriptGenerator(AllChipsScriptGenerator):
 
 
 class MockAllChipsScriptGenerator_Pbs(AllChipsScriptGenerator_Pbs):
-  def _readTrimfilesAndCalculateParams(self):
-    self.camconfig = 1
-    self.camstr = 'Group0'
-    self.obshistid = '123456'
-    self.filt = '2'
+  def _loadFocalplaneNames(self, extraidFile, extraid, centid):
+    self.obshistid = '1234560'
+    self.filterNum = '2'
+    self.filterName = filterToLetter(self.filterNum)
+    self.extraid = '0'
+    self.centid = centid
     return
 
   def _makePaths(self):

@@ -136,25 +136,8 @@ class AllChipsScriptGenerator:
         self.debugLevel = self.policy.getint('general','debuglevel')
         self.regenAtmoscreens = self.policy.getboolean('general','regenAtmoscreens')
 
-        #Get obshistid and filter ID from trimfile
-        with file(self.trimfile, 'r') as trimf:
-            self.obshistid, self.filterNum = ReadObshistidAndFilt(trimf)
-        self.filterName = filterToLetter(self.filterNum)
-
-        # Get non-default commands & extra ID
-        self.centid = centid
-        if extraidFile:
-            self.extraidFile = extraidFile.strip()
-            with file(self.extraidFile, 'r') as exFile:
-                extraid, centid = ReadExtraidFile(exFile)
-        else:
-            self.extraidFile = ''
-        self.extraid = extraid
-        # Set obshistid to include extraid
-        self.obshistid += self.extraid
-        print 'extraid:', self.extraid
-        print 'obshistid:', self.obshistid
-        print 'Centroid FileID:', self.centid
+        # Sets self.obshistid, self.filterNum, self.extraid, self.centid:
+        self._loadFocalplaneNames(extraidFile, extraid, centid)
 
         # SET USEFUL DIRECTORY PATHS
 
@@ -192,6 +175,32 @@ class AllChipsScriptGenerator:
         self.trackingParFile   = _d['tracking']
         self.trackParFile      = _d['track']
         return
+
+    def _loadFocalplaneNames(self, extraidFile, extraid, centid):
+        """Reads obshistid, filter, extraid, centid from trimfile and extraidfile.
+
+        Sets self.obshistid, self.filterName, self.filterNum, self.centid,
+        and self.trimfile by reading self.trimfile and extraidFile.
+        """
+        #Get obshistid and filter ID from trimfile
+        with file(self.trimfile, 'r') as trimf:
+            self.obshistid, self.filterNum = ReadObshistidAndFilt(trimf)
+        self.filterName = filterToLetter(self.filterNum)
+
+        # Get non-default commands & extra ID
+        self.centid = centid
+        if extraidFile:
+            self.extraidFile = extraidFile.strip()
+            with file(self.extraidFile, 'r') as exFile:
+                extraid, centid = ReadExtraidFile(exFile)
+        else:
+            self.extraidFile = ''
+        self.extraid = extraid
+        # Set obshistid to include extraid
+        self.obshistid += self.extraid
+        print 'extraid:', self.extraid
+        print 'obshistid:', self.obshistid
+        print 'Centroid FileID:', self.centid
 
     def makeScripts(self, idonly=""):
         """This is the main public method for this class.
