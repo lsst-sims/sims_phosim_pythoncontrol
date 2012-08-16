@@ -45,7 +45,7 @@ v-1.0	  23580	       none	  Compatable w/ Nicole's documented version
 v-1.1     25315        v-2.2.1    Still compatable with Nicole's documented
 				  version (except for using .cfg files)
 				  but works with ImSim tag v-2.2.1 *and*
-				  Python files can reside in a separate 
+				  Python files can reside in a separate
 				  directory.
 
 v-2.0     25583        v-2.2.1    Major rewrite.  No longer compatable
@@ -71,13 +71,13 @@ v-3.0.1                v-3.0.1    Updated to work with ImSim v-3.0.1.
 				  "verifyFiles.py" script, which is
 				  documented below.
 
-	
+
 ==========================
 USAGE
 ==========================
 
 These scripts divide execution of the ImSim workflow into two distict
-phases: "preprocessing" and "raytrace".  
+phases: "preprocessing" and "raytrace".
 
 The "preprocessing" stage runs a single job per visit and executes the
 following ImSim binaries:
@@ -114,7 +114,7 @@ The basic workflow:
       <config_filename>: The name of the configuration file.  There
 			 are two example config files provided in the distro:
 			 imsimConfig_workstation.cfg and imsimConfig_minerva.cfg.
-			 These follow the Python ConfigParser convention.  
+			 These follow the Python ConfigParser convention.
 			 More documentation on config files is
 			 provided below.
       <extraid_filename>: Name of the extraid file.
@@ -125,7 +125,7 @@ The basic workflow:
       The scripts contain all the commands to run the preprocessing
       stage for each visit.  The exact contents of these scripts
       depends on the scheduling environment (e.g. shell, PBS, LSF,
-      etc).  A manifest of all of the scripts is located in 
+      etc).  A manifest of all of the scripts is located in
       stagePath1/preprocessingJobs.lis (including the command required
       to invoke the script...if you just want to blindly run every
       line in the file, just "csh preprocessingJobs.lis").
@@ -137,12 +137,12 @@ The basic workflow:
       execution node, unpack it, execute the preprocessing stage,
       then copy the output to "stagePath2."  At the very end of this
       process, the script will verify that all of the necessary output
-      files exist in stagePath2 by running the script verifyFiles.py.  
+      files exist in stagePath2 by running the script verifyFiles.py.
       If file verification is successful:
          1. The script will output "Output file verification completed
             with no errors."
 	 2. It will create a list of jobs for the next stage
-            (raytracing) that is located in "stagePath2" and named 
+            (raytracing) that is located in "stagePath2" and named
 	    "<obshistid>-f<filter>-Jobs.lis".  You can simply execute
             the commands in this file to run the raytracing jobs.
       If file verification is not successful:
@@ -197,7 +197,7 @@ as possible, there are a number of directories.  The good news is that
 many of these can be set to the same values (see "simplifications"
 below).
 
-There are 3 main storage locations: 
+There are 3 main storage locations:
    1. On the submission node (i.e. the client node),
    2. On a shared storage volume that is accessible from both the submit
           and the execution nodes.
@@ -207,14 +207,14 @@ The directory structure in each location is as follows.  The names of
 the variables that must be specified are given in quotes.  The names
 of items that are put into these directories is also given for informational
 purposes and these are not in quotes.
-   
+
    submission (visible only from submission node):
        /"IMSIM_SOURCE_PATH"             Absolute path to ImSim source directory tree
        /"IMSIM_EXEC_PATH"               If this is defined, it is the location of the
                                         ImSim executables (for build systems that place
-                                        executables in different locations).  If not 
+                                        executables in different locations).  If not
                                         defined, executables are assumed to be in IMSIM_HOME_PATH.
-                                        Note that IMSIM_EXEC_PATH must still preserve the 
+                                        Note that IMSIM_EXEC_PATH must still preserve the
                                         same directory structure as IMSIM_HOME_PATH.
    shared storage (visible from both submission and execution nodes):
        /"dataPathPRE"/"dataTarballPRE"  Abs. path to the "preprocessing" tarball containing
@@ -237,7 +237,7 @@ purposes and these are not in quotes.
        /"stagePath2"/*-f[filter]        Files for each full focal plane visit
        /"stagePath2"/*-f[filter]/nodefiles*.tar.gz  Files for this visit common to all detectors
        /"stagePath2"/*-f[filter]/run*   Param files for each detector/exposure and atmosphere screens
- 
+
        /"savePath"                      Abs. path to which output data is written
        /"savePath"/*-f[filter]/logs     log files organized by full focal plane visit
        /"savePath"/imSim                Output images! (Yes, eventually we do generate these!)
@@ -255,7 +255,7 @@ purposes and these are not in quotes.
                id:         full exposure id of the form R[0-4][0-4]_S[0-2][0-2]_E[0-9][0-9][0-9]
          Example: "1111110-fr-R01_S12_E001"
 
-Simplifications: 
+Simplifications:
    - stagePath1, stagePath2, and savePath can all point to the same location if desired.
    - scratchSharedPath and scratchExecPath can also point to same location if desired.
    - dataTarballPRE and dataTarballSEDs can be the same tarball
@@ -284,7 +284,6 @@ needs to access a single file per focal plane.
                  directory (this just made things too complicated in the script
                  logic).  For example, the directories "focal_plane," agnSED," starSED,"
                  etc should be in the root of the tarball.
-          
 
 ==========================
 VERIFYING FILES

@@ -369,27 +369,30 @@ class AllChipsScriptGenerator:
         to 'run' directory.
 
         """
+        os.chdir('%s' %(self.workDir))
         if not self.idonly:
+            # Telescope data and parameter files (and data files if needed)
             nodeFilesTar = '%s%s.tar' % (nodeFilesBasename, self.obshistid)
-            os.chdir('%s' %(self.workDir))
             self._tarTelescopeParamFiles(nodeFilesTar)
             self._tarParsFiles(nodeFilesTar)
+            # Executables and binaries files for running on nodes.
+            nodeFilesExecTar = '%sExec%s.tar' % (nodeFilesBasename, self.obshistid)
+            self._tarExecFiles(nodeFilesExecTar)
             if self.regenAtmoscreens:
-                self._tarRegenAtmoscreenFiles(nodeFilesTar)
+                self._tarRegenAtmoscreenFiles(nodeFilesTar, nodeFilesExecTar)
             else:
                 self._tarAtmosphereFiles(nodeFilesTar)
-
-            # Zip the tar file.
+            # Zip the tar files.
             print 'Gzipping %s' % nodeFilesTar
             cmd = 'gzip %s' % nodeFilesTar
             subprocess.check_call(cmd, shell=True)
             nodeFilesTar += '.gz'
+            print 'Gzipping %s' % nodeFilesExecTar
+            cmd = 'gzip %s' % nodeFilesExecTar
+            subprocess.check_call(cmd, shell=True)
+            nodeFilesExecTar += '.gz'
             # Move to stagePath2
             self._stageNodeFilesTarball(nodeFilesTar)
-
-            # Executables and binaries files for running on nodes.
-            nodeFilesExecTar = '%sExec%s.tar.gz' % (nodeFilesBasename, self.obshistid)
-            self._tarExecFiles(nodeFilesExecTar)
             self._stageNodeFilesTarball(nodeFilesExecTar)
         # Move the parameter, and fits files to the run directory.
         self._cleanupFitsFiles()
@@ -414,7 +417,7 @@ class AllChipsScriptGenerator:
                                       self.controlParFile, self.obsCatFile)
         subprocess.check_call(cmd, shell=True)
 
-    def _tarExecFiles(self, nodeFilesTar, tarCommand='czf'):
+    def _tarExecFiles(self, nodeFilesTar, tarCommand='cf'):
         print 'Tarring binaries/executables.'
         cmd = ('tar %s %s ancillary/trim/trim ancillary/Add_Background/*'
                ' ancillary/cosmic_rays/* ancillary/e2adc/e2adc raytrace/lsst'
@@ -430,10 +433,14 @@ class AllChipsScriptGenerator:
         cmd =  'tar %s %s %s' % (tarCommand, nodeFilesTar, fileGlob)
         subprocess.check_call(cmd, shell=True)
 
-    def _tarRegenAtmoscreenFiles(self, nodeFilesTar, tarCommand='rf'):
-      print 'Tarring atmosphere screen regeneration files.'
+    def _tarRegenAtmoscreenFiles(self, nodeFilesTar, nodeFilesExecTar, tarCommand='rf'):
+      print 'Tarring atmosphere screen regeneration binaries.'
       cmd = ('tar %s %s ancillary/atmosphere_parameters/* ancillary/atmosphere/*'
-             ' default_instcat %s' % (tarCommand, nodeFilesTar, self.trimfile))
+             % (tarCommand, nodeFilesExecTar))
+      subprocess.check_call(cmd, shell=True)
+      print 'Tarring atmosphere screen regeneration data files'
+      cmd = 'tar %s %s default_instcat %s' % (tarCommand, nodeFilesTar,
+                                              self.trimfile)
       subprocess.check_call(cmd, shell=True)
 
     def _stageNodeFilesTarball(self, nodeFilesTar):
