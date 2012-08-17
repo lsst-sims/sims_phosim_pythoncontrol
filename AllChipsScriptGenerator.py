@@ -442,14 +442,18 @@ class AllChipsScriptGenerator:
         cmd =  'tar %s %s %s' % (tarCommand, nodeFilesTar, fileGlob)
         subprocess.check_call(cmd, shell=True)
 
-    def _tarRegenAtmoscreenFiles(self, nodeFilesTar, nodeFilesExecTar, tarCommand='rf'):
+    def _tarRegenAtmoscreenFiles(self, nodeFilesTar, nodeFilesExecTar, tarCommand='rhf'):
       print 'Tarring atmosphere screen regeneration binaries.'
       cmd = ('tar %s %s ancillary/atmosphere_parameters/* ancillary/atmosphere/*'
              % (tarCommand, nodeFilesExecTar))
       subprocess.check_call(cmd, shell=True)
       print 'Tarring atmosphere screen regeneration data files'
+      if os.path.dirname(self.trimfile):
+        # If the trimfile exists elsewhere on the filesystem, there should be
+        # a symbolic link in the cwd.
+        assert os.path.islink(os.path.basename(self.trimfile))
       cmd = 'tar %s %s default_instcat %s' % (tarCommand, nodeFilesTar,
-                                              self.trimfile)
+                                              os.path.basename(self.trimfile))
       subprocess.check_call(cmd, shell=True)
 
     def _stageNodeFilesTarball(self, nodeFilesTar):
