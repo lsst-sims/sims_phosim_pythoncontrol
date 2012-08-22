@@ -236,7 +236,7 @@ class AllVisitsScriptGenerator:
         os.chdir(self.imsimSourcePath)
         cmd =  'tar czf %s' % os.path.join(self.tmpdir, self.sourceFileTgzName)
         cmd += ' lsst/*.txt ancillary/atmosphere_parameters/*.txt'
-        cmd += ' ancillary/Add_Background/filter_constants* ancillary/Add_Background/fits_files'
+        cmd += ' ancillary/Add_Background/filter_constants*'
         cmd += ' ancillary/Add_Background/SEDs/*.txt ancillary/Add_Background/vignetting_*.txt'
         cmd += ' ancillary/cosmic_rays/iray_textfiles/iray* raytrace/*.txt'
         cmd += ' raytrace/version pbs/distributeFiles.py *_instcat'
