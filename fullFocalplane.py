@@ -30,10 +30,15 @@ Options: trimfile:    absolute path and name of the trimfile
 
 """
 from __future__ import with_statement
-import sys
 import ConfigParser
+import logger
+import sys
+from distutils import version
 from AllChipsScriptGenerator import *
 from chip import WithTimer
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(filename='/tmp/fullFocalplane.log')
 
 def main(trimfile, imsimConfigFile, extraidFile, id):
 
@@ -43,32 +48,63 @@ def main(trimfile, imsimConfigFile, extraidFile, id):
     policy file.
     """
 
-    print 'Running fullFocalPlane (and AllChipsScriptGenerator) on: ', trimfile
+    print 'Running fullFocalPlane on: ', trimfile
+    logging.info('Running fullFocalPlane on: %s ', trimfile
 
     # Parse the config file
     policy = ConfigParser.RawConfigParser()
     policy.read(imsimConfigFile)
-    # Determine the pre-processing scheduler so that we know which class to use
+    if policy.has_option('general', 'version'):
+      phosim_version = policy.get('general', 'version')
+    else:
+      phosim_version = '3.0.1'
     scheduler = policy.get('general','scheduler2')
-    with WithTimer() as t:
+    if version.LooseVersion(phosim_version) < version.LooseVersion("3.2.0"):
+      with WithTimer() as t:
+        # Determine the pre-processing scheduler so that we know which class to use
         if scheduler == 'csh':
-            scriptGenerator = AllChipsScriptGenerator(trimfile, policy, extraidFile)
-            scriptGenerator.makeScripts(id)
+          scriptGenerator = AllChipsScriptGenerator(trimfile, policy, extraidFile)
+          scriptGenerator.makeScripts(id)
         elif scheduler == 'pbs':
-            scriptGenerator = AllChipsScriptGenerator_Pbs(trimfile, policy, extraidFile)
-            scriptGenerator.makeScripts(id)
+          scriptGenerator = AllChipsScriptGenerator_Pbs(trimfile, policy, extraidFile)
+          scriptGenerator.makeScripts(id)
         elif scheduler == 'exacycle':
-            print "Exacycle funtionality not added yet."
-            quit()
+          print "Exacycle funtionality not added yet."
+          quit()
         else:
-            print "Scheduler '%s' unknown.  Use -h or --help for help." %(scheduler)
-    t.PrintWall('fullFocalplane.py', sys.stderr)
+          print "Scheduler '%s' unknown.  Use -h or --help for help." %(scheduler)
+      t.LogWall('makeScripts')
+      result = True
+    else:
+      if id:
+        logging.critical('Single exposure mode is currently not supported for phosim > 3.2.0\n')
+        sys.exit(-1)
+      if scheduler == 'csh':
+        preprocessor = PhosimPreprocessor(trimfile, policy, extraCommand)
+      elif scheduler == 'pbs':
+          logging.critical('PBS not supported yet.')
+          sys.exit(-1)
+      else:
+          logging.critical('Unknown scheduler: %s. Use -h or --help for help', scheduler)
+          sys.exit(-1)
+      with WithTimer() as t:
+        if not preprocessor.DoPreprocessing():
+          logging.critical('DoPreprocessing() failed.')
+          sys.exit(-1)
+      t.LogWall('DoPreprocessing')
+      preprocessor.ArchivePreprocOutput():
+      with WithTimer() as t:
+        if not preprocessor.StagePreprocOutput():
+          logging.critical('StagePreprocOutput() failed.')
+          sys.exit(-1)
+      t.LogWall('StagePreprocOutput')
+    return result
 
 
 if __name__ == "__main__":
 
     if len(sys.argv) < 4 or len(sys.argv) > 5:
-        print "usage: python fullFocalplane.py trimfile imsimConfigFile extraidFile [Rxx_Sxx_Exxx]"
+        print "usage: python fullFocalplane.py trimfile imsimConfigFile extraidFile/extraCommands [Rxx_Sxx_Exxx]"
         quit()
 
     trimfile = sys.argv[1]

@@ -5,6 +5,7 @@ Classes that manage a single ImSim full focal plane
 
 from __future__ import with_statement
 import datetime
+import logging
 import math
 import shutil
 import subprocess
@@ -118,6 +119,16 @@ class WithTimer:
 
     def PrintWall(self, name, stream):
       stream.write('TIMER[%s]: wall: %f sec\n' %(name, self.interval[1]))
+
+    def Log(self, name):
+      logging.info('TIMER[%s]: cpu: %f sec  wall: %f sec\n', name,
+                   self.interval[0], self.interval[1])
+
+    def LogCpu(self, name):
+      logging.info('TIMER[%s]: cpu: %f sec\n', name, self.interval[0])
+
+    def LogWall(self, name):
+      logging.info('TIMER[%s]: wall: %f sec\n', name, self.interval[1])
 
 
 class Focalplane(object):
