@@ -3,12 +3,20 @@ import glob
 import logging
 import os
 import shutil
+import subprocess
+import time
 
 logger = logging.getLogger(__name__)
 
 # ********************************************
 # FILE STAGING AND ARCHIVE
 # ********************************************
+
+def ResetDirectory(dir_name):
+  """Deletes directory if it exists, then recreates it."""
+  if os.path.exists(dir_name):
+    shutil.rmtree(dir_name)
+  os.makedirs(dir_name)
 
 def CompressFile(fn, compression='gzip'):
   """Compresses a file.
@@ -29,7 +37,7 @@ def CompressFile(fn, compression='gzip'):
     cmd = '%s %s'
     logging.info('Compressing %s with command %s', fn, cmd)
     subprocess.check_call(cmd, shell=True)
-    if compression == 'gzip'):
+    if compression == 'gzip':
       compressed_fn = fn + '.gz'
     else:
       compressed_fn = fn + '.bz2'
@@ -177,5 +185,5 @@ def RunWithWallTimer(func, name=None):
   result = func()
   interval = time.time() - start_wall
   if name:
-    logging_info('TIMER[%s]: wall: %f sec', name, interval)
+    logging.info('TIMER[%s]: wall: %f sec', name, interval)
   return interval, result

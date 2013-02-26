@@ -1,17 +1,21 @@
-This file contains instructions for ImSim/PhoSim v3.2.x and later.
+This is the README file for running ImSim/PhoSim v3.0.1 and earlier.
+The control scripts were completely reworked for v3.2.x and later,
+and instructions for those are in README.txt
 
-For running ImSim/PhoSim v-3.0.x and earlier, see README.v3.0.x.txt.
 
 ==========================
 Python ImSim Control Files
 ==========================
 
-The Python control files have been completely reworked and greatly
-simplified since v3.0.x.
+These files are for use with the LSST Image Simulator (ImSim).  As of
+tag v-1.1, the Python scripts no longer need to be in the ImSim source
+tree when they are executed.
 
-These files are for use with the LSST Image Simulator ("ImSim" or
-"PhoSim") v3.2.x and greater.  They do not need to be in the ImSim
-source tree when they are executed.
+For ImSim revisions predating and including 25503, these Python
+control scripts are still part of the ImSim tree itself (after that,
+they were moved over here).  The v-1.1 Python scripts and above will
+ignore any Python scripts in the ImSim root, so you should not have to
+worry about deleting them.
 
 The correct procedure is to:
   1) Check out proper revision of ImSim (see below)
@@ -27,32 +31,50 @@ REQUIREMENTS
    must be in your path for the raytracing stage (see below).
 3. Python 2.5 or later
 
-
 ==========================
 REVISIONS
 ==========================
 
-The tags of the Python control package match the ImSim/PhoSim tag with
-which they are designed to interface.
+The following tags of the Python control package work with the
+following revisions of ImSim:
 
-==========================
-NOTES ON PHOSIM
-==========================
-There are a few caveats to keep in mind when running phosim:
-
-1) Even though the "phosim" script has an alternate "data" directory
-   as an option, not all executables can accomodate this.  Therefore,
-   when running in a distributed environment, one still needs to link
-   the "data" directory as a child of the working directory.
-
-2) Copy default_instcat into the shared data archive.
-
-3) To tar up phosim, do:
-   tar czf phosim.tgz bin/ cleanup phosim/phosim phosim/phosim2.py
+Tag	  ImSim Rev    ImSim Tag  Notes:
+------	  ---------    ---------  --------------------------------------------
+v-1.0	  23580	       none	  Compatable w/ Nicole's documented version
+				  except that it uses .cfg file and
+				  not .paf.  In this version, the
+				  Python control files must be run
+				  from the root of the ImSim source tree.
 
 
-% python26 /local/gardnerj/lsst/git/python_control/fullFocalplane.py /local/gardnerj/lsst/trims/obsid99999999/metadata_99999999.dat /local/gardnerj/lsst/git/python_control/phosimConfig_workstation.cfg /local/gardnerj/lsst/git/python_control/clouds
+v-1.1     25315        v-2.2.1    Still compatable with Nicole's documented
+				  version (except for using .cfg files)
+				  but works with ImSim tag v-2.2.1 *and*
+				  Python files can reside in a separate
+				  directory.
 
+v-2.0     25583        v-2.2.1    Major rewrite.  No longer compatable
+                                  with Nicole's version.  Reorg of
+                                  config params to better accomodate
+                                  Exacycle.
+
+v-2.1                  v-2.2.1    Reorganization in the handling of
+                mirrors/exacycle  the shared data (QE, height maps, SEDs)
+		                  to be more flexible and accomodate
+				  shared storage architectures.
+
+v-2.2 		       v-2.2.1    Addition of unit tests
+		mirrors/exacycle
+
+v-2.2.1                v-2.2.1    Minor tweaks and bug fixes.  Last
+                mirrors/exacycle  tag to work with ImSim v-2.2.1
+
+v-3.0.1                v-3.0.1    Updated to work with ImSim v-3.0.1.
+				  Lots of updates, including the
+				  addition of timers for all major
+				  workflow components, and the
+				  "verifyFiles.py" script, which is
+				  documented below.
 
 
 ==========================
