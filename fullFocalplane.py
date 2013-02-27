@@ -34,6 +34,7 @@ import ConfigParser
 from distutils import version
 import logging
 from optparse import OptionParser  # Can't use argparse yet, since we must work in 2.5
+import os
 import sys
 from AllChipsScriptGenerator import AllChipsScriptGenerator
 from Focalplane import WithTimer  # TODO(gardnerj): Move this to PhosimUtil.
@@ -43,6 +44,58 @@ logging.basicConfig(format='%(asctime)s %(levelname)s:%(name)s:  %(message)s',
                     filename='/tmp/fullFocalplane.log',
                     level=logging.DEBUG)
 logger = logging.getLogger(__name__)
+
+def DoPreprocOldVersion(trimfile, policy, extra_commands, scheduler, sensor_id):
+  """Do preprocessing for v3.1.0 and earlier."""
+  with WithTimer() as t:
+    # Determine the pre-processing scheduler so that we know which class to use
+    if scheduler == 'csh':
+      scriptGenerator = AllChipsScriptGenerator(trimfile, policy, extra_commands)
+      scriptGenerator.makeScripts(sensor_id)
+    elif scheduler == 'pbs':
+      scriptGenerator = AllChipsScriptGenerator_Pbs(trimfile, policy, extra_commands)
+      scriptGenerator.makeScripts(sensor_id)
+    elif scheduler == 'exacycle':
+      print 'Exacycle funtionality not added yet.'
+      return 1
+    else:
+      print 'Scheduler "%s" unknown.  Use -h or --help for help.' % scheduler
+  t.LogWall('makeScripts')
+  return 0
+
+def DoPreproc(trimfile, policy, extra_commands, scheduler,
+              skip_atmoscreens=False, keep_scratch_dirs=False):
+  """Do preprocessing for v3.2.0 and later."""
+  if scheduler == 'csh':
+    preprocessor = PhosimManager.PhosimPreprocessor(trimfile, policy, extra_commands)
+  elif scheduler == 'pbs':
+      logging.critical('PBS not supported yet.')
+      return 1
+  else:
+      logging.critical('Unknown scheduler: %s. Use -h or --help for help',
+                       scheduler)
+      return 1
+  preprocessor.InitExecEnvironment()
+  with WithTimer() as t:
+    if not preprocessor.DoPreprocessing(skip_atmoscreens=skip_atmoscreens):
+      logging.critical('DoPreprocessing() failed.')
+      return 1
+  t.LogWall('DoPreprocessing')
+  archive_fn = 'pars_%s.zip' % preprocessor.focalplane.observationID
+  archive_names = preprocessor.ArchiveRaytraceInputByExt(archive_name=archive_fn,
+                                                         skip_atmoscreens=skip_atmoscreens)
+  exec_manifest_fn = 'execmanifest_%s.txt' % preprocessor.focalplane.observationID
+  archive_names.extend(preprocessor.ArchiveRaytraceScriptsByExt(exec_manifest_name=exec_manifest_fn))
+  if not archive_names:
+    logging.critical('Output archive step failed.')
+    return 1
+  with WithTimer() as t:
+    preprocessor.StageOutput(archive_names)
+  t.LogWall('StageOutput')
+  if not keep_scratch_dirs:
+    preprocessor.Cleanup()
+  return 0
+
 
 def main(trimfile, imsim_config_file, extra_commands, skip_atmoscreens,
          keep_scratch_dirs, sensor_ids):
@@ -71,52 +124,16 @@ def main(trimfile, imsim_config_file, extra_commands, skip_atmoscreens,
       logging.critical('Multiple sensors not supported in version < 3.1.0.')
       return 1
     sensor_id = '' if sensor_ids == 'all' else sensor_ids
-    with WithTimer() as t:
-      # Determine the pre-processing scheduler so that we know which class to use
-      if scheduler == 'csh':
-        scriptGenerator = AllChipsScriptGenerator(trimfile, policy, extra_commands)
-        scriptGenerator.makeScripts(sensor_id)
-      elif scheduler == 'pbs':
-        scriptGenerator = AllChipsScriptGenerator_Pbs(trimfile, policy, extra_commands)
-        scriptGenerator.makeScripts(sensor_id)
-      elif scheduler == 'exacycle':
-        print 'Exacycle funtionality not added yet.'
-        quit()
-      else:
-        print 'Scheduler "%s" unknown.  Use -h or --help for help.' % scheduler
-    t.LogWall('makeScripts')
-    return 0
+    return DoPreprocOldVersion(trimfile, policy, extra_commandsm,scheduler,
+                               sensor_id)
   elif version.LooseVersion(phosim_version) > version.LooseVersion('3.2.0'):
     if sensor_ids != 'all':
       logging.critical('Single exposure mode is currently not supported for'
                        ' phosim > 3.2.0')
       return 1
-    if scheduler == 'csh':
-      preprocessor = PhosimManager.PhosimPreprocessor(trimfile, policy, extra_commands)
-    elif scheduler == 'pbs':
-        logging.critical('PBS not supported yet.')
-        return 1
-    else:
-        logging.critical('Unknown scheduler: %s. Use -h or --help for help',
-                         scheduler)
-        return 1
-    preprocessor.InitExecEnvironment()
-    with WithTimer() as t:
-      if not preprocessor.DoPreprocessing(skip_atmoscreens=skip_atmoscreens):
-        logging.critical('DoPreprocessing() failed.')
-        return 1
-    t.LogWall('DoPreprocessing')
-    archive_names = preprocessor.ArchiveRaytraceInputByExt(skip_atmoscreens=skip_atmoscreens)
-    archive_names.extend(preprocessor.ArchiveRaytraceScriptsByExt())
-    if not archive_names:
-      logging.critical('Output archive step failed.')
-      return 1
-    with WithTimer() as t:
-      preprocessor.StageOutput(archive_names)
-    t.LogWall('StageOutput')
-    if not keep_scratch_dirs:
-      preprocessor.Cleanup()
-    return 0
+    return DoPreproc(trimfile, policy, extra_commands, scheduler,
+                     skip_atmoscreens=skip_atmoscreens,
+                     keep_scratch_dirs=keep_scratch_dirs)
   logging.critical('Unsupported phosim version %s', phosim_version)
   return 1
 

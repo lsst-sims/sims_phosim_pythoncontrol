@@ -106,6 +106,7 @@ class PhosimPreprocessor(PhosimManager):
 
     self.instrument = instrument
     self.sensor = sensor
+
     self.run_e2adc = run_e2adc
     self.observation_id = ObservationIdFromTrimfile(instance_catalog)
     # Directory in which to execute this instance.
@@ -224,16 +225,34 @@ class PhosimPreprocessor(PhosimManager):
     os.chdir(self.my_exec_path)
     return [archive_fullpath]
 
-  def ArchiveRaytraceScriptsByExt(self, archive_name=None):
+  def ArchiveRaytraceScriptsByExt(self, archive_name=None,
+                                  exec_manifest_name=None):
     """Archives raytrace exec scripts.
 
     For running in 'csh' environment, don't archive anything.
+
+    Args:
+      archive_name:  Ignored for this implementation.  Would be the name of
+                     archive file.
+      exec_manifest_name: Create a file of this name and write to it a manifest
+                     of all of the exec files that were created.
+
+    Returns:
+      A list of absolute paths to all exec files, plus the exec_manifest file if
+      it was created.
     """
     if archive_name:
       logger.warning('Ignoring archive_name=%s...I\'m not archiving anything.',
                      archive_name)
-    return map(os.path.abspath,
-               glob.glob(os.path.join(self.phosim_work_dir, 'exec_*.csh')))
+    exec_list = map(os.path.abspath,
+                    glob.glob(os.path.join(self.phosim_work_dir, 'exec_*.csh')))
+    if exec_manifest_name:
+      with open(os.path.join(self.phosim_work_dir,
+                             exec_manifest_name), 'w') as exec_manifest:
+        for script in exec_list:
+          exec_manifest.write('%s\n' % os.path.basename(script))
+      exec_list.append(os.path.join(self.phosim_work_dir, exec_manifest_name))
+    return exec_list
 
   def StageOutput(self, fn_list):
     """Moves files to stage_path.
