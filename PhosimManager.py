@@ -3,6 +3,7 @@ from __future__ import with_statement
 import datetime
 import functools
 import getpass
+import glob
 import logging
 import os
 import shutil
@@ -53,10 +54,7 @@ class PhosimManager(object):
     PhosimUtil.ResetDirectory(self.phosim_work_dir)
     PhosimUtil.ResetDirectory(self.phosim_output_dir)
     if os.path.exists(self.phosim_data_dir):
-      if os.path.islink(self.phosim_data_dir):
-        os.unlink(self.phosim_data_dir)
-      else:
-        shutil.rmtree(self.phosim_data_dir)
+      PhosimUtil.RemoveDirOrLink(self.phosim_data_dir)
 
   def _BuildDataDir(self):
     """Makes a symlink to shared_data_path or unarchives data_tarball."""
@@ -89,6 +87,14 @@ class PhosimManager(object):
     self._MoveInputFiles()
     self._InitOutputDirectories()
     os.chdir(self.my_exec_path)
+
+  def Cleanup(self):
+    if os.path.exists(self.phosim_work_dir):
+      PhosimUtil.RemoveDirOrLink(self.phosim_work_dir)
+    if os.path.exists(self.phosim_output_dir):
+      PhosimUtil.RemoveDirOrLink(self.phosim_output_dir)
+    if os.path.exists(self.phosim_data_dir):
+      PhosimUtil.RemoveDirOrLink(self.phosim_data_dir)
 
 
 class PhosimPreprocessor(PhosimManager):
@@ -193,10 +199,9 @@ class PhosimPreprocessor(PhosimManager):
     os.chdir(self.my_exec_path)
     return True
 
-  def ArchiveOutput(self, skip_atmoscreens=False,
-                    trimcatalog_archive='trimcatalogs.tar.gz',
-                    pars_archive='pars.tar.gz'):
-    """Archives output from DoPreprocessing() into archives.
+  def ArchiveRaytraceInputByExt(self, archive_name='pars.zip',
+                                skip_atmoscreens=False):
+    """Archives output from DoPreprocessing().
 
     Automatically selects proper archive method from file extension
     by using PhosimUtil.ArchiveFilesByExtAndDelete().
@@ -211,22 +216,24 @@ class PhosimPreprocessor(PhosimManager):
       CalledProcessError if archive op fails.
     """
     os.chdir(self.phosim_work_dir)
-    archives = [self._ArchiveTrimcatalogs(trimcatalog_archive)]
-    archives.append(self._ArchivePars(pars_archive, skip_atmoscreens=skip_atmoscreens))
-    os.chdir(self.my_exec_path)
-    return archives
-
-  def _ArchiveTrimcatalogs(self, arc_fn):
-    """Archive trimcatalog_*.pars separately becase they are so large."""
-    logging.info('Archiving "trimcatalog_*.pars" files')
-    return PhosimUtil.ArchiveFilesByExtAndDelete(arc_fn, 'trimcatalog_*.pars')
-
-  def _ArchivePars(self, arc_fn, skip_atmoscreens=False):
-    """Gathers .pars files into archive 'arc_fn'."""
-    globs = '*.pars'
+    globs = 'raytrace_*.pars e2adc_*.pars'
     if not skip_atmoscreens:
       globs += ' *.fits *.fits.gz'
-    return PhosimUtil.ArchiveFilesByExtAndDelete(arc_fn, globs)
+    archive_fullpath = PhosimUtil.ArchiveFilesByExtAndDelete(archive_name, globs)
+    logger.info('Archived globs "%s" into "%s".', globs, archive_fullpath)
+    os.chdir(self.my_exec_path)
+    return [archive_fullpath]
+
+  def ArchiveRaytraceScriptsByExt(self, archive_name=None):
+    """Archives raytrace exec scripts.
+
+    For running in 'csh' environment, don't archive anything.
+    """
+    if archive_name:
+      logger.warning('Ignoring archive_name=%s...I\'m not archiving anything.',
+                     archive_name)
+    return map(os.path.abspath,
+               glob.glob(os.path.join(self.phosim_work_dir, 'exec_*.csh')))
 
   def StageOutput(self, fn_list):
     """Moves files to stage_path.
@@ -237,7 +244,7 @@ class PhosimPreprocessor(PhosimManager):
     Raises:
       OSError upon failure of move or mkdir ops
     """
-    logging.info('Staging output files to %s.', self.my_output_path)
+    logging.info('Staging output files to %s: %s', self.my_output_path, fn_list)
     PhosimUtil.StageFiles(fn_list, self.my_output_path)
     return
 

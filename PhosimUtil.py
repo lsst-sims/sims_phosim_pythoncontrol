@@ -12,6 +12,14 @@ logger = logging.getLogger(__name__)
 # FILE STAGING AND ARCHIVE
 # ********************************************
 
+def RemoveDirOrLink(dir_name):
+  """Recusively deletes a directory if it is hard,  or soft link."""
+  if os.path.islink(dir_name):
+    os.unlink(dir_name)
+  else:
+    shutil.rmtree(dir_name)
+
+
 def ResetDirectory(dir_name):
   """Deletes directory if it exists, then recreates it."""
   if os.path.exists(dir_name):
@@ -185,5 +193,5 @@ def RunWithWallTimer(func, name=None):
   result = func()
   interval = time.time() - start_wall
   if name:
-    logging.info('TIMER[%s]: wall: %f sec', name, interval)
+    logger.info('TIMER[%s]: wall: %f sec', name, interval)
   return interval, result
