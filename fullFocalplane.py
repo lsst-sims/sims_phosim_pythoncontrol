@@ -1,33 +1,7 @@
 #!/usr/bin/python
 
 """
-Brief:   Python script to create the 378 shell scripts necessary to execute
-         the raytracing and subsequent portions of the ImSim workflow.
-         (189 chips + 2 exposures per chip)
-         In general, this is called by the script that was made by
-         SingleVisitScriptGenerator.  All of the work is done by the
-         AllChipsScriptGenerator class.  Similar to Nicole's original version,
-         it can also be called with a single-chip exposure argument and will just
-         work on a single chip and not generate any script.
-
-         Note that which scheduler to use is determined by the 'scheduler2'
-         option in the config file.
-
-Date:    Jan 26, 2012
-Authors: Nicole Silvestri, U. Washington, nms21@uw.edu,
-         Jeff Gardner, U. Washington, Google, gardnerj@phys.washington.edu
-Updated:
-
-Usage:   python fullFocalplanePbs.py [options]
-Options: trimfile:    absolute path and name of the trimfile
-                      to process (unzipped)
-         policy:      your copy of the imsimPbsPolicy.paf file
-         extraidFile: name of the file containing extra parameters
-                      to change simulator defaults (eg. turn clouds off)
-
-         To run in single chip mode, supply the full exposure ID ('Rxx_Sxx_Exxx')
-         as the optional 4th argument.  R=Raft, S=Sensor, E=Exposure
-
+ADD DOCUMENTATION!
 """
 from __future__ import with_statement
 import ConfigParser
@@ -66,7 +40,7 @@ def DoPreproc(trimfile, imsim_config_file, extra_commands, scheduler,
   policy = ConfigParser.RawConfigParser()
   policy.read(imsim_config_file)
   if scheduler == 'csh':
-    preprocessor = PhosimManager.PhosimPreprocessor(trimfile, policy, extra_commands)
+    preprocessor = PhosimManager.PhosimPreprocessor(policy, trimfile, extra_commands)
   elif scheduler == 'pbs':
       logger.critical('PBS not supported yet.')
       return 1
@@ -169,8 +143,7 @@ if __name__ == '__main__':
                     help='Do not cleanup working directories.')
   parser.add_option('-l', '--logtostdout', dest='log_to_stdout',
                     action='store_true', default=False,
-                    help='Write logging.INFO and above to stdout in addition to'
-                    ' the log file.')
+                    help='Write logging outout to stdout instead of log file.')
   parser.add_option('-s', '--sensor', dest='sensor_ids', default='all',
                     help='Specify a list of sensor ids to use delimited by "|",'
                     ' or use "all" for all.')

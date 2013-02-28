@@ -38,14 +38,14 @@ class RaytraceScriptWriter(ScriptWriter):
                            run_e2adc):
     logger.info('Generating Raytrace script header.')
     outf.write('#!/bin/csh')
-    outf.write(' -x\n') if self.debug_level else outf.write('\n')
+    outf.write(' -x\n') if self.debug_level >= 2 else outf.write('\n')
     outf.write('### -------------------------------------------------------------\n')
     outf.write('### Shell script created by: %s\n' % getpass.getuser())
     outf.write('###              created on: %s\n' % str(datetime.datetime.now()))
-    outf.write('### observation ID:          %s\n' % observation_id)
+    outf.write('### Observation ID:          %s\n' % observation_id)
     outf.write('### Chip ID:                 %s\n' % cid)
     outf.write('### Exposure ID:             %s\n' % eid)
-    outf.write('### instrument:              %s\n' % instrument)
+    outf.write('### Instrument:              %s\n' % instrument)
     outf.write('### -------------------------------------------------------------\n\n')
 
   def _WriteStageIn(self, outf, observation_id, cid, eid, filter_num, instrument,

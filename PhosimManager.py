@@ -34,11 +34,9 @@ def ObservationIdFromTrimfile(instance_catalog, extra_commands=None):
 class PhosimManager(object):
   """Parent class for managing Phosim execution on distributed platforms."""
 
-  def __init__(self, instance_catalog, policy, extra_commands=None):
+  def __init__(self, policy):
 
-    self.instance_catalog = instance_catalog.strip()
     self.policy = policy
-    self.extra_commands = extra_commands
     self.scratch_exec_path = self.policy.get('general', 'scratch_exec_path')
     self.save_path = self.policy.get('general','save_path')
     self.stage_path = self.policy.get('general','stage_path')
@@ -109,10 +107,12 @@ class PhosimManager(object):
 class PhosimPreprocessor(PhosimManager):
   """Manages Phosim preprocessing stage."""
 
-  def __init__(self, instance_catalog, policy, extra_commands=None,
+  def __init__(self, policy, instance_catalog, extra_commands=None,
                instrument='lsst', sensor='all', run_e2adc=True):
-    PhosimManager.__init__(self, instance_catalog, policy, extra_commands)
+    PhosimManager.__init__(self, policy)
 
+    self.instance_catalog = instance_catalog.strip()
+    self.extra_commands = extra_commands
     self.instrument = instrument
     self.sensor = sensor
 
@@ -122,7 +122,7 @@ class PhosimPreprocessor(PhosimManager):
     self.my_exec_path = os.path.join(self.scratch_exec_path, self.observation_id)
     # Directory to which to copy preprocessing output upon completion.
     self.my_output_path = os.path.join(self.stage_path, self.observation_id)
-    # Arguments for PhosimFocalplane
+    # Phosim execution environment
     self.phosim_data_dir = os.path.join(self.my_exec_path, 'data')
     self.phosim_output_dir = os.path.join(self.my_exec_path, 'output')
     self.phosim_work_dir = os.path.join(self.my_exec_path, 'work')
@@ -219,6 +219,8 @@ class PhosimPreprocessor(PhosimManager):
       CalledProcessError if archive op fails.
     """
     os.chdir(self.phosim_work_dir)
+    # If we are regenerating atmosphere screens, all of the parameters
+    # needed for this should be in raytrace_*.pars.
     globs = 'raytrace_*.pars e2adc_*.pars'
     if not skip_atmoscreens:
       globs += ' *.fits *.fits.gz'
@@ -273,9 +275,67 @@ class PhosimPreprocessor(PhosimManager):
     return
 
 class PhosimRaytracer(PhosimManager):
+  """Manages Phosim raytracing stage."""
   # REMEMBER TO CAT THE atmosphere_<observation_id>.pars FILE
   # INTO raytrace_<fid>.pars IF ATMOSCREEN ARE GENERATED IN
   # RAYTRACING STAGE!
-  pass
+
+  def __init__(self, policy, observation_id, cid, eid, filter_num,
+               instrument='lsst', run_e2adc=True):
+    PhosimManager.__init__(self, policy)
+    self.observation_id = observation_id
+    self.cid = cid
+    self.eid = eid
+    self.filter_num = filter_num
+    self.instrument = instrument
+    self.run_e2adc = run_e2adc
+    self.fid = phosim.BuildFid(self.observation_id, self.cid, self.eid)
+    # Directory in which to execute this instance.
+    self.my_exec_path = os.path.join(self.scratch_exec_path, self.fid)
+    # Phosim execution environment
+    self.phosim_data_dir = os.path.join(self.my_exec_path, 'data')
+    self.phosim_output_dir = os.path.join(self.my_exec_path, 'output')
+    self.phosim_work_dir = os.path.join(self.my_exec_path, 'work')
+    self.phosim_instr_dir = os.path.join(self.phosim_data_dir, instrument)
+
+  def _CopyAndModifyParsFiles(self):
+    """Copy .pars files to phosim_work_dir and append proper dirs.
+
+    After copy, appends correct values of seddir, datadir, and instrdir.
+    """
+    shutil.copy(
+                self.phosim_work_dir)
+    cmd = 'unzip -d %s %s' % (self.phosim_work_dir,
+                              os.path.join(self.stage_path,
+                                         self.pars_archive_name))
+    logger.info('Executing %s' % cmd)
+    subprocess.check_call(cmd, shell=True)
+    for pars_base in ['raytrace', 'e2adc']:
+      pars_fn = '%s_%s.pars' % (pars_base, self.fid)
+      if os.path.isfile(pars_fn):
+        logger.info('Appending updated directories to file %s' % pars_fn)
+        with open(pars_fn, 'a') as pars:
+          pars.write('seddir %s\n' % os.path.join(self.phosim_data_dir, SEDs))
+          pars.write('datadir %s\n' % self.phosim_data_dir)
+          pars.write('instrdir %s\n' % self.phosim_instr_dir)
+
+  def _MoveInputFiles(self):
+    """Manages any input files/data needed for phosim execution."""
+    self._BuildDataDir()
+    self._CopyAndModifyParsFiles()
+
+  def _InitOutputDirectories(self):
+    pass
+
+  def InitExecEnvironment(self, pars_archive_name='pars.zip'):
+    """Initializes the execution environment.
+
+    Creates working directories and constructs PhosimFocalplane instance.
+    CHANGES DIRECTORY TO my_exec_path.
+    """
+    self.pars_archive_name=pars_archive_name
+    self.InitDirectories()
+    #os.chdir(self.my_exec_path)
+
 
 
