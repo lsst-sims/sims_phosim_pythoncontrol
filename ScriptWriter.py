@@ -13,9 +13,9 @@ logger = logging.getLogger(__name__)
 class ScriptWriter(object):
   """Writes scripts for various ImSim/PhoSim stages."""
   def __init__(self, phosim_bin_dir, phosim_data_dir, phosim_output_dir,
-               phosim_work_dir, exec_script_base=None, debug_level=0,
-               python_exec='python', python_control_dir='.'):
-    self._exec_script_base = exec_script_base
+               phosim_work_dir, debug_level=0, python_exec='python',
+               python_control_dir='.', imsim_config_file=None,
+               exec_script_base=None, pars_archive_fullpath=None):
     self.phosim_bin_dir = phosim_bin_dir
     self.phosim_data_dir = phosim_data_dir
     self.phosim_output_dir = phosim_output_dir
@@ -23,12 +23,21 @@ class ScriptWriter(object):
     self.debug_level = debug_level
     self.python_exec = python_exec
     self.python_control_dir = python_control_dir
+    self.imsim_config_file = imsim_config_file
+    self._exec_script_base = exec_script_base
+    self._pars_archive_fullpath = pars_archive_fullpath
 
   def SetExecScriptBase(self, exec_script_base):
     self._exec_script_base = exec_script_base
 
   def GetExecScriptBase(self):
     return self._exec_script_base
+
+  def SetParsArchive(self, name):
+    self._pars_archive_fullpath = name
+
+  def GetParsArchive(self):
+    return self.pars_archive_fullpath
 
 
 class RaytraceScriptWriter(ScriptWriter):
@@ -70,11 +79,14 @@ class RaytraceScriptWriter(ScriptWriter):
     outf.write('else\n')
     outf.write('   setenv PYTHONPATH %s\n' % self.phosim_bin_dir)
     outf.write('endif\n')
-    cmd = ('%s %s --obsid=%s --cid=%s --eid=%s --filternum=%s --instrument=%s'
-           ' --run_e2adc=%s --bin_dir=%s --output_dir=%s --data_dir=%s' %
+    cmd = ('%s %s %s %s %s %s %s --instrument=%s' %
            (self.python_exec, os.path.join(self.python_control_dir, 'onechip.py'),
-            observation_id, cid, eid, filter_num, instrument, run_e2adc,
-            self.phosim_bin_dir, self.phosim_output_dir, self.phosim_data_dir))
+            self.imsim_config_file, observation_id, cid, eid, filter_num,
+            instrument))
+    if not run_e2adc:
+      cmd += ' --no_e2adc'
+    if self._pars_archive_fullpath:
+      cmd += ' --pars_archive=%s' % self._pars_archive_fullpath
     logger.info('Script Exec command: %s', cmd)
     outf.write('%s\n\n' % cmd)
 

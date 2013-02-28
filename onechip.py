@@ -10,6 +10,7 @@ from optparse import OptionParser  # Can't use argparse yet, since we must work 
 import os
 import sys
 import PhosimManager
+import phosim2 as phosim
 
 logger = logging.getLogger(__name__)
 
@@ -19,22 +20,20 @@ def ConfigureLogging(observation_id, fid, policy, log_to_stdout):
     log_fn = None
   else:
     if policy.has_option('general', 'log_dir'):
-      # Log to file in log_dir
-      obsid = PhosimManager.ObservationIdFromTrimfile(
-        trimfile, extra_commands=options.extra_commands)
-      log_dir = policy.get('general', 'log_dir')
-      if not os.path.exists(log_dir):
-        os.makedirs(log_dir)
-      log_fn = os.path.join(log_dir, 'fullFocalplane_%s.log' % obsid)
+      log_dir = os.path.join(policy.get('general', 'log_dir'), obsid)
+      log_fn = os.path.join(log_dir, 'onechip_%s.log' % fid)
     else:
-      log_fn = '/tmp/fullFocalplane.log'
-  log_format = '%(asctime)s %(levelname)s:%(name)s:  %(message)s'
-  log_level = logging.DEBUG if policy.getint('general', 'debug_level') else logging.INFO
-  logging.basicConfig(filename=log_fn, filemode='w', level=log_level, format=log_format)
+      log_fn = '/tmp/onechip.log'
+  PhosimUtil.ConfigureLogging(policy.getint('general', 'debug_level'),
+                              logfile_fullpath=log_fn)
 
+
+def DoRaytrace(raytracer, pars_archive_name):
+  raytracer.InitExecEnvironment(pars_archive_name=pars_archive_name)
 
 def main(imsim_config_file, observation_id, cid, eid, filter_num,
-         instrument='lsst', run_e2adc=True, log_to_stdout=False);
+         pars_archive_name='pars.zip', instrument='lsst', run_e2adc=True,
+         log_to_stdout=False):
 
   """
   Run raytrace step for a single fid.
@@ -44,41 +43,18 @@ def main(imsim_config_file, observation_id, cid, eid, filter_num,
   assert policy.has_option('general', 'phosim_version')
   assert (version.LooseVersion(policy.get('general', 'phosim_version'))
           > version.LooseVersion('3.2.0'))
-  ConfigureLogging(observation_id, policy, log_to_stdout)
+  fid = phosim.BuildFid(observation_id, cid, eid)
+  ConfigureLogging(observation_id, fid, policy, log_to_stdout)
+  logger.info('Running onechip with imsim_config_file=%s  fid=%s'
+              ' filter_num=%s, instrument=%s run_e2adc=%s',
+              imsim_config_file, fid, filter_num, instrument,
+              run_e2adc)
   raytracer = PhosimManager.PhosimRaytracer(policy, observation_id, cid,
                                             eid, filter_num,
                                             instrument=instrument,
                                             run_e2adc=run_e2adc)
+  return DoRaytrace(raytracer, pars_archive_name)
 
-
-    
-    phosim_version = policy.get('general', 'phosim_version')
-  else:
-    phosim_version = '3.0.1'
-  ConfigureLogging(trimfile, policy, log_to_stdout)
-  # print 'Running fullFocalPlane on: ', trimfile
-  logger.info('Running fullFocalPlane on: %s ', trimfile)
-
-  # print 'Using Imsim/Phosim version', phosim_version
-  logger.info('Using Imsim/Phosim version %s', phosim_version)
-  scheduler = policy.get('general','scheduler2')
-  if version.LooseVersion(phosim_version) < version.LooseVersion('3.1.0'):
-    if len(sensor_ids.split('|')) > 1:
-      logger.critical('Multiple sensors not supported in version < 3.1.0.')
-      return 1
-    sensor_id = '' if sensor_ids == 'all' else sensor_ids
-    return DoPreprocOldVersion(trimfile, policy, extra_commandsm,scheduler,
-                               sensor_id)
-  elif 
-    if sensor_ids != 'all':
-      logger.critical('Single exposure mode is currently not supported for'
-                       ' phosim > 3.2.0')
-      return 1
-    return DoPreproc(trimfile, imsim_config_file, extra_commands, scheduler,
-                     skip_atmoscreens=skip_atmoscreens,
-                     keep_scratch_dirs=keep_scratch_dirs)
-  logger.critical('Unsupported phosim version %s', phosim_version)
-  return 1
 
 if __name__ == '__main__':
 
@@ -90,6 +66,8 @@ if __name__ == '__main__':
   parser.add_option('-l', '--logtostdout', dest='log_to_stdout',
                     action='store_true', default=False,
                     help='Write logging output to stdout instead of log file.')
+  parser.add_option('-p', '--pars_archive', dest='pars_archive_name',
+                    default='pars.zip', help='Name of pars archive')
   (options, args) = parser.parse_args()
   if len(args) != 5:
     print 'Incorrect number of arguments.  Use -h or --help for help.'
@@ -101,5 +79,6 @@ if __name__ == '__main__':
   cid = args[2]
   eid = args[3]
   filter_num = args[4]
-  sys.exit(main(obsid, cid, eid, filter_num, options.instrument,
-                options.run_e2adc, options.log_to_stdout))
+  sys.exit(main(imsim_config_file, obsid, cid, eid, filter_num,
+                options.pars_archive_name, options.instrument, options.run_e2adc,
+                options.log_to_stdout))

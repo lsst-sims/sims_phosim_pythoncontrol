@@ -195,3 +195,16 @@ def RunWithWallTimer(func, name=None):
   if name:
     logger.info('TIMER[%s]: wall: %f sec', name, interval)
   return interval, result
+
+# ********************************************
+# LOGGERS
+# ********************************************
+def ConfigureLogging(debug_level, logfile_fullpath=None):
+  if logfile_fullpath:
+    if not os.path.exists(os.path.dirname(logfile_fullpath)):
+      os.makedirs(os.path.dirname(logfile_fullpath))
+  log_format = '%(asctime)s %(levelname)s:%(name)s:  %(message)s'
+  log_level = logging.DEBUG if debug_level else logging.INFO
+  logging.basicConfig(filename=logfile_fullpath, filemode='w', level=log_level,
+                      format=log_format)
+

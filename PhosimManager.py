@@ -107,10 +107,12 @@ class PhosimManager(object):
 class PhosimPreprocessor(PhosimManager):
   """Manages Phosim preprocessing stage."""
 
-  def __init__(self, policy, instance_catalog, extra_commands=None,
-               instrument='lsst', sensor='all', run_e2adc=True):
+  def __init__(self, policy, imsim_config_file, instance_catalog,
+               extra_commands=None, instrument='lsst', sensor='all',
+               run_e2adc=True):
     PhosimManager.__init__(self, policy)
 
+    self.imsim_config_file = imsim_config_file
     self.instance_catalog = instance_catalog.strip()
     self.extra_commands = extra_commands
     self.instrument = instrument
@@ -128,10 +130,15 @@ class PhosimPreprocessor(PhosimManager):
     self.phosim_work_dir = os.path.join(self.my_exec_path, 'work')
     self.phosim_instr_dir = os.path.join(self.phosim_data_dir, instrument)
     self.focalplane = None
+    self.pars_archive_name = None
+    self.skip_atmoscreens = None
+    staged_config_file = os.path.join(self.stage_path,
+                                      os.path.basename(self.imsim_config_file))
     self.script_writer = ScriptWriter.RaytraceScriptWriter(
       self.phosim_bin_dir, self.phosim_data_dir, self.phosim_output_dir,
       self.phosim_work_dir, debug_level=self.debug_level,
-      python_exec=self.python_exec, python_control_dir=self.python_control_dir)
+      python_exec=self.python_exec, python_control_dir=self.python_control_dir,
+      imsim_config_file=staged_config_file)
 
 
   def InitExecEnvironment(self):
@@ -162,7 +169,8 @@ class PhosimPreprocessor(PhosimManager):
     PhosimUtil.ResetDirectory(self.my_output_path)
 
   def DoPreprocessing(self, skip_atmoscreens=False, log_timings=True,
-                      exec_script_base='exec_raytrace'):
+                      exec_script_base='exec_raytrace',
+                      pars_archive_name=None):
     """Performs phosim preprocessing stage and generates scripts for raytrace.
 
     Args:
@@ -172,6 +180,12 @@ class PhosimPreprocessor(PhosimManager):
                          bandwidth required to transfer the screens to the
                          raytrace workers.
       log_timings:       Logs execution time of each of the steps.
+      exec_script_base:  The base of the raytrace exec scripts.
+      pars_archive_name: Name of the archive to which raytrace pars files
+                         will be written (this is needed by the ScriptWriter
+                         in order to provide the raytrace script with the
+                         proper command-line args).  If None, will be
+                         set to 'pars_<observation_id>.zip'.
 
     Returns:
       True upon success, False otherwise.
@@ -196,21 +210,34 @@ class PhosimPreprocessor(PhosimManager):
       functools.partial(self.focalplane.GenerateTrimObjects, self.sensor), name=name)
     name = 'ScheduleRaytrace' if log_timings else None
     self.script_writer.SetExecScriptBase(exec_script_base)
+    if not pars_archive_name:
+      pars_archive_name = 'pars_%s.zip' % self.focalplane.observationID
+    self.pars_archive_name = pars_archive_name
+    self.script_writer.SetParsArchive(self.pars_archive_name)
+    self.skip_atmoscreens = skip_atmoscreens
+    logger.debug('Set self.pars_archive_name=%s  self.skip_atmoscreens=%s',
+                 self.pars_archive_name, self.skip_atmoscreens)
     PhosimUtil.RunWithWallTimer(
       functools.partial(self.focalplane.ScheduleRaytrace, self.instrument, self.run_e2adc),
       name=name)
     os.chdir(self.my_exec_path)
     return True
 
-  def ArchiveRaytraceInputByExt(self, archive_name='pars.zip',
-                                skip_atmoscreens=False):
+  def ArchiveRaytraceInputByExt(self, pars_archive_name=None,
+                                exec_archive_name=None,
+                                skip_atmoscreens=None):
     """Archives output from DoPreprocessing().
 
     Automatically selects proper archive method from file extension
     by using PhosimUtil.ArchiveFilesByExtAndDelete().
 
     Args:
-      skip_atmoscreens:  If True, does not package atmosphere screens.
+      archive_name:       Override previous pars archive filename.
+      exec_archive_name:  Name of archive for exec scripts.  If this ends
+                          with '.txt', will simply write a manifest of exec
+                          scripts and stage each exec file separately.
+      skip_atmoscreens:   Override previous skip_atmoscreens.
+
 
     Returns:
       A list of archives that were created with full paths.
@@ -218,47 +245,62 @@ class PhosimPreprocessor(PhosimManager):
     Raises:
       CalledProcessError if archive op fails.
     """
+    if pars_archive_name:
+      self.pars_archive_name = pars_archive_name
+    assert self.pars_archive_name
+    if skip_atmoscreens is not None:
+      self.skip_atmoscreens = skip_atmoscreens
+    assert self.skip_atmoscreens is not None
     os.chdir(self.phosim_work_dir)
+    archives = []
+    archives.append(self._ArchiveParsByExt(pars_archive_name, skip_atmoscreens))
+    archives.extend(self._ArchiveExecScriptsByExt(exec_archive_name))
+    archives.append(self.imsim_config_file)
+    os.chdir(self.my_exec_path)
+    return archives
+
+  def _ArchiveParsByExt(self, archive_name, skip_atmoscreens):
+    """Archives raytrace .pars files.
+
+    TODO(gardnerj): Add capability to handle .txt extension
+    """
     # If we are regenerating atmosphere screens, all of the parameters
     # needed for this should be in raytrace_*.pars.
     globs = 'raytrace_*.pars e2adc_*.pars'
-    if not skip_atmoscreens:
+    if not self.skip_atmoscreens:
       globs += ' *.fits *.fits.gz'
-    archive_fullpath = PhosimUtil.ArchiveFilesByExtAndDelete(archive_name, globs)
+    archive_fullpath = PhosimUtil.ArchiveFilesByExtAndDelete(self.pars_archive_name,
+                                                             globs)
     logger.info('Archived globs "%s" into "%s".', globs, archive_fullpath)
-    os.chdir(self.my_exec_path)
-    return [archive_fullpath]
+    return archive_fullpath
 
-  def ArchiveRaytraceScriptsByExt(self, archive_name=None,
-                                  exec_manifest_name=None):
+  def _ArchiveExecScriptsByExt(self, archive_name='execmanifest_raytrace.txt'):
     """Archives raytrace exec scripts.
 
     For running in 'csh' environment, don't archive anything.
 
     Args:
-      archive_name:  Ignored for this implementation.  Would be the name of
-                     archive file.
-      exec_manifest_name: Create a file of this name and write to it a manifest
-                     of all of the exec files that were created.
-
+      exec_archive_name:  Name of archive for exec scripts.  If this ends
+                          with '.txt', will simply write a manifest of exec
+                          scripts and stage each exec file separately.
     Returns:
       A list of absolute paths to all exec files, plus the exec_manifest file if
       it was created.
+    TODO(gardnerj): Add capability to handle non-.txt extensions
     """
+    if not archive_name.endswith('.txt'):
+      raise NotImplementedError('Exec scripts to archive other than .txt'
+                                ' has not been implemented, yet.')
     exec_script_base = self.script_writer.GetExecScriptBase()
     assert exec_script_base
-    if archive_name:
-      logger.warning('Ignoring archive_name=%s...I\'m not archiving anything.',
-                     archive_name)
     exec_list = map(os.path.abspath,
                     glob.glob(os.path.join(self.phosim_work_dir,
                                            '%s_*.csh' % exec_script_base)))
-    if exec_manifest_name:
-      with open(os.path.join(self.phosim_work_dir,
-                             exec_manifest_name), 'w') as exec_manifest:
-        for script in exec_list:
-          exec_manifest.write('%s\n' % os.path.basename(script))
-      exec_list.append(os.path.join(self.phosim_work_dir, exec_manifest_name))
+    with open(os.path.join(self.phosim_work_dir,
+                           archive_name), 'w') as exec_manifest:
+      for script in exec_list:
+        exec_manifest.write('%s\n' % os.path.basename(script))
+    exec_list.append(os.path.join(self.phosim_work_dir, archive_name))
     return exec_list
 
   def StageOutput(self, fn_list):

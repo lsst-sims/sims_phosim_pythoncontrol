@@ -13,6 +13,7 @@ import sys
 from AllChipsScriptGenerator import AllChipsScriptGenerator
 from Focalplane import WithTimer  # TODO(gardnerj): Move this to PhosimUtil.
 import PhosimManager
+import PhosimUtil
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +41,8 @@ def DoPreproc(trimfile, imsim_config_file, extra_commands, scheduler,
   policy = ConfigParser.RawConfigParser()
   policy.read(imsim_config_file)
   if scheduler == 'csh':
-    preprocessor = PhosimManager.PhosimPreprocessor(policy, trimfile, extra_commands)
+    preprocessor = PhosimManager.PhosimPreprocessor(policy, imsim_config_file,
+                                                    trimfile, extra_commands)
   elif scheduler == 'pbs':
       logger.critical('PBS not supported yet.')
       return 1
@@ -54,16 +56,13 @@ def DoPreproc(trimfile, imsim_config_file, extra_commands, scheduler,
       logger.critical('DoPreprocessing() failed.')
       return 1
   t.LogWall('DoPreprocessing')
-  archive_fn = 'pars_%s.zip' % preprocessor.focalplane.observationID
-  archive_names = preprocessor.ArchiveRaytraceInputByExt(archive_name=archive_fn,
-                                                         skip_atmoscreens=skip_atmoscreens)
   exec_manifest_fn = 'execmanifest_raytrace_%s.txt' % preprocessor.focalplane.observationID
-  archive_names.extend(preprocessor.ArchiveRaytraceScriptsByExt(exec_manifest_name=exec_manifest_fn))
-  if not archive_names:
+  files_to_stage = preprocessor.ArchiveRaytraceInputByExt(exec_archive_name=exec_manifest_fn)
+  if not files_to_stage:
     logger.critical('Output archive step failed.')
     return 1
   with WithTimer() as t:
-    preprocessor.StageOutput(archive_names + [imsim_config_file])
+    preprocessor.StageOutput(files_to_stage)
   t.LogWall('StageOutput')
   if not keep_scratch_dirs:
     preprocessor.Cleanup()
@@ -77,16 +76,12 @@ def ConfigureLogging(trimfile, policy, log_to_stdout):
       # Log to file in log_dir
       obsid = PhosimManager.ObservationIdFromTrimfile(
         trimfile, extra_commands=options.extra_commands)
-      log_dir = policy.get('general', 'log_dir')
-      if not os.path.exists(log_dir):
-        os.makedirs(log_dir)
+      log_dir = os.path.join(policy.get('general', 'log_dir'), obsid)
       log_fn = os.path.join(log_dir, 'fullFocalplane_%s.log' % obsid)
     else:
       log_fn = '/tmp/fullFocalplane.log'
-  log_format = '%(asctime)s %(levelname)s:%(name)s:  %(message)s'
-  log_level = logging.DEBUG if policy.getint('general', 'debug_level') else logging.INFO
-  logging.basicConfig(filename=log_fn, filemode='w', level=log_level, format=log_format)
-
+  PhosimUtil.ConfigureLogging(policy.getint('general', 'debug_level'),
+                              logfile_fullpath=log_fn)
 
 def main(trimfile, imsim_config_file, extra_commands, skip_atmoscreens,
          keep_scratch_dirs, sensor_ids, log_to_stdout=False):
