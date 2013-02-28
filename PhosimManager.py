@@ -1,8 +1,6 @@
 #!/usr/bin/python
 from __future__ import with_statement
-import datetime
 import functools
-import getpass
 import glob
 import logging
 import os
@@ -11,6 +9,7 @@ import sys
 import time
 
 import PhosimUtil
+import ScriptWriter
 import phosim2 as phosim
 
 logger = logging.getLogger(__name__)
@@ -19,11 +18,18 @@ logger = logging.getLogger(__name__)
 def NotImplementedField(self):
   raise NotImplementedError
 
-def ObservationIdFromTrimfile(instance_catalog):
+def ObservationIdFromTrimfile(instance_catalog, extra_commands=None):
   """Returns observation ID as read frim instance_catalog."""
+  obsid = None
   for line in open(instance_catalog, 'r'):
     if line.startswith('Opsim_obshistid'):
-      return line.strip().split()[1]
+      obsid = line.strip().split()[1]
+  assert obsid
+  if extra_commands:
+    for line in open(extra_commands, 'r'):
+      if line.startswith('extraid'):
+        obsid += line.split()[1]
+  return obsid
 
 class PhosimManager(object):
   """Parent class for managing Phosim execution on distributed platforms."""
@@ -41,8 +47,10 @@ class PhosimManager(object):
     self.data_tarball = self.policy.get('general', 'data_tarball')
     self.debug_level = self.policy.getint('general','debug_level')
     self.regen_atmoscreens = self.policy.getboolean('general','regen_atmoscreens')
+    self.python_exec = self.policy.get('general', 'python_exec')
+    self.python_control_dir = self.policy.get('general', 'python_control_dir')
+    self.phosim_bin_dir = self.policy.get('general', 'phosim_binDir')
     # The following should be defined in subclasses
-    self.phosim_bin_dir = NotImplementedField
     self.phosim_data_dir = NotImplementedField
     self.phosim_output_dir = NotImplementedField
     self.phosim_work_dir = NotImplementedField
@@ -70,7 +78,7 @@ class PhosimManager(object):
       if not os.path.isfile(tarball_path):
         raise RuntimeError('Data tarball %s does not exist.' % tarball_path)
       cmd = 'tar -xf %s -C %s' % (tarball_path, self.phosim_data_dir)
-      logging.info('Executing %s' % cmd)
+      logger.info('Executing %s' % cmd)
       subprocess.check_call(cmd, shell=True)
 
   def _MoveInputFiles(self):
@@ -83,10 +91,10 @@ class PhosimManager(object):
                               ' implemented subclass.')
 
   def InitDirectories(self):
+    """Initializes execution working directories and moves input files."""
     self._InitExecDirectories()
     self._MoveInputFiles()
     self._InitOutputDirectories()
-    os.chdir(self.my_exec_path)
 
   def Cleanup(self):
     if os.path.exists(self.phosim_work_dir):
@@ -95,6 +103,7 @@ class PhosimManager(object):
       PhosimUtil.RemoveDirOrLink(self.phosim_output_dir)
     if os.path.exists(self.phosim_data_dir):
       PhosimUtil.RemoveDirOrLink(self.phosim_data_dir)
+
 
 
 class PhosimPreprocessor(PhosimManager):
@@ -114,17 +123,27 @@ class PhosimPreprocessor(PhosimManager):
     # Directory to which to copy preprocessing output upon completion.
     self.my_output_path = os.path.join(self.stage_path, self.observation_id)
     # Arguments for PhosimFocalplane
-    self.phosim_bin_dir = self.policy.get('general', 'phosim_binDir')
     self.phosim_data_dir = os.path.join(self.my_exec_path, 'data')
     self.phosim_output_dir = os.path.join(self.my_exec_path, 'output')
     self.phosim_work_dir = os.path.join(self.my_exec_path, 'work')
     self.phosim_instr_dir = os.path.join(self.phosim_data_dir, instrument)
+    self.focalplane = None
+    self.script_writer = ScriptWriter.RaytraceScriptWriter(
+      self.phosim_bin_dir, self.phosim_data_dir, self.phosim_output_dir,
+      self.phosim_work_dir, debug_level=self.debug_level,
+      python_exec=self.python_exec, python_control_dir=self.python_control_dir)
+
 
   def InitExecEnvironment(self):
+    """Initializes the execution environment.
+
+    Creates working directories and constructs PhosimFocalplane instance.
+    CHANGES DIRECTORY TO my_exec_path.
+    """
     self.InitDirectories()
-    grid_opts = {'script_writer': self.WriteRaytraceScript,
+    grid_opts = {'script_writer': self.script_writer.WriteScript,
                  'submitter': None}
-    logging.info('Creating instance PhosimFocalplane(%s, %s, %s, %s, %s, %s,'
+    logger.info('Creating instance PhosimFocalplane(%s, %s, %s, %s, %s, %s,'
                  ' grid=%s, grid_opts=%s', self.my_exec_path, self.phosim_output_dir,
                  self.phosim_work_dir, self.phosim_bin_dir, self.phosim_data_dir,
                  self.phosim_instr_dir, 'cluster', grid_opts)
@@ -136,32 +155,14 @@ class PhosimPreprocessor(PhosimManager):
                                               self.phosim_instr_dir,
                                               grid='cluster',
                                               grid_opts=grid_opts)
+    os.chdir(self.my_exec_path)
+
 
   def _InitOutputDirectories(self):
     PhosimUtil.ResetDirectory(self.my_output_path)
 
-  def WriteRaytraceScript(self, observation_id, cid, eid, filter_num, output_dir,
-                          bin_dir, data_dir, instrument='lsst', run_e2adc=True):
-    assert output_dir == self.phosim_output_dir
-    assert bin_dir == self.phosim_bin_dir
-    assert data_dir == self.phosim_data_dir
-    assert self.instrument == instrument
-    assert self.run_e2adc == run_e2adc
-    script_name = 'exec_%s.csh' % phosim.BuildFid(observation_id, cid, eid)
-    with open(script_name, 'w') as outf:
-      outf.write('#!/bin/csh')
-      outf.write(' -x\n') if self.debug_level else outf.write('\n')
-      outf.write('### ---------------------------------------\n')
-      outf.write('### Shell script created by: %s\n' % getpass.getuser())
-      outf.write('###              created on: %s\n' % str(datetime.datetime.now()))
-      outf.write('### observation ID:          %s\n' % observation_id)
-      outf.write('### Chip ID:                 %s\n' % cid)
-      outf.write('### Exposure ID:             %s\n' % eid)
-      outf.write('### instrument:              %s\n' % instrument)
-      outf.write('### ---------------------------------------\n\n')
-    return
-
-  def DoPreprocessing(self, skip_atmoscreens=False, log_timings=True):
+  def DoPreprocessing(self, skip_atmoscreens=False, log_timings=True,
+                      exec_script_base='exec_raytrace'):
     """Performs phosim preprocessing stage and generates scripts for raytrace.
 
     Args:
@@ -177,10 +178,10 @@ class PhosimPreprocessor(PhosimManager):
 
     TODO(gardnerj): Modify phosim so that it returns success/failure.
     """
-    logging.info('Calling LoadInstanceCatalog(%s, %s).', self.instance_catalog,
+    logger.info('Calling LoadInstanceCatalog(%s, %s).', self.instance_catalog,
                  self.extra_commands)
     self.focalplane.LoadInstanceCatalog(self.instance_catalog, self.extra_commands)
-    logging.info('self.observation_id: %s    self.focalplane.observationID: %s',
+    logger.info('self.observation_id: %s    self.focalplane.observationID: %s',
                  self.observation_id, self.focalplane.observationID)
     os.chdir(self.phosim_work_dir)
     name = 'WriteInputParamsAndCatalogs' if log_timings else None
@@ -194,6 +195,7 @@ class PhosimPreprocessor(PhosimManager):
     PhosimUtil.RunWithWallTimer(
       functools.partial(self.focalplane.GenerateTrimObjects, self.sensor), name=name)
     name = 'ScheduleRaytrace' if log_timings else None
+    self.script_writer.SetExecScriptBase(exec_script_base)
     PhosimUtil.RunWithWallTimer(
       functools.partial(self.focalplane.ScheduleRaytrace, self.instrument, self.run_e2adc),
       name=name)
@@ -241,11 +243,14 @@ class PhosimPreprocessor(PhosimManager):
       A list of absolute paths to all exec files, plus the exec_manifest file if
       it was created.
     """
+    exec_script_base = self.script_writer.GetExecScriptBase()
+    assert exec_script_base
     if archive_name:
       logger.warning('Ignoring archive_name=%s...I\'m not archiving anything.',
                      archive_name)
     exec_list = map(os.path.abspath,
-                    glob.glob(os.path.join(self.phosim_work_dir, 'exec_*.csh')))
+                    glob.glob(os.path.join(self.phosim_work_dir,
+                                           '%s_*.csh' % exec_script_base)))
     if exec_manifest_name:
       with open(os.path.join(self.phosim_work_dir,
                              exec_manifest_name), 'w') as exec_manifest:
@@ -263,7 +268,7 @@ class PhosimPreprocessor(PhosimManager):
     Raises:
       OSError upon failure of move or mkdir ops
     """
-    logging.info('Staging output files to %s: %s', self.my_output_path, fn_list)
+    logger.info('Staging output files to %s: %s', self.my_output_path, fn_list)
     PhosimUtil.StageFiles(fn_list, self.my_output_path)
     return
 

@@ -43,7 +43,7 @@ def CompressFile(fn, compression='gzip'):
   compressed_fn = fn
   if compression in ['gzip', 'bzip2']:
     cmd = '%s %s'
-    logging.info('Compressing %s with command %s', fn, cmd)
+    logger.info('Compressing %s with command %s', fn, cmd)
     subprocess.check_call(cmd, shell=True)
     if compression == 'gzip':
       compressed_fn = fn + '.gz'
@@ -73,7 +73,7 @@ def DecompressFileByExt(fn):
   elif fn.endswith('.bz2'):
     cmd = 'bunzip2 %s' % fn
   if cmd:
-    logging.info('Decompressing %s', fn)
+    logger.info('Decompressing %s', fn)
     subprocess.check_call(cmd, shell=True)
     return fn.rsplit('.', 1)[0]
   return fn
@@ -120,7 +120,7 @@ def ArchiveFilesByExt(fn, globs, delete_files=False):
     cmd = 'zip %s %s' % (fn, globs)
   else:
     raise ValueError('Unknown extension for archive file %s' % fn)
-  logging.info('Creating archive with command: %s', cmd)
+  logger.info('Creating archive with command: %s', cmd)
   subprocess.check_call(cmd, shell=True)
   if delete_files:
     DeleteFileGlobs(globs)
@@ -143,10 +143,10 @@ def UnarchiveFileByExt(fn, delete_archive=False):
   elif fn.endswith('.zip'):
     cmd = 'unzip %s' % fn
   if cmd:
-    logging.info('Unarchiving %s', fn)
+    logger.info('Unarchiving %s', fn)
     subprocess.check_call(cmd, shell=True)
     if delete_archive:
-      logging.info('Deleting %s', fn)
+      logger.info('Deleting %s', fn)
       os.remove(fn)
 
 def StageFiles(source_list, dest, decompress=False, unarchive=False):
@@ -165,7 +165,7 @@ def StageFiles(source_list, dest, decompress=False, unarchive=False):
     shutil.rmtree(dest)
   os.makedirs(dest)
   for source in source_list:
-    logging.info('Copying %s to %s', source, dest)
+    logger.info('Copying %s to %s', source, dest)
     shutil.copy(source, dest)
     dest_fn = os.path.join(dest, os.path.basename(source))
     if decompress:
@@ -179,11 +179,11 @@ def StageFiles(source_list, dest, decompress=False, unarchive=False):
 # ********************************************
 
 def RunWithWallTimer(func, name=None):
-  """Runs 'func' with a timer, optionally writes time to logging.info.
+  """Runs 'func' with a timer, optionally writes time to logger.info.
 
   Args:
     func:   Callback for function to time.
-    name:   If provided, will write a message to logging.info with
+    name:   If provided, will write a message to logger.info with
             the tag 'name'.
 
   Returns:
