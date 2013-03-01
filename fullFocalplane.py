@@ -11,7 +11,6 @@ from optparse import OptionParser  # Can't use argparse yet, since we must work 
 import os
 import sys
 from AllChipsScriptGenerator import AllChipsScriptGenerator
-from Focalplane import WithTimer  # TODO(gardnerj): Move this to PhosimUtil.
 import PhosimManager
 import PhosimUtil
 
@@ -19,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 def DoPreprocOldVersion(trimfile, policy, extra_commands, scheduler, sensor_id):
   """Do preprocessing for v3.1.0 and earlier."""
-  with WithTimer() as t:
+  with PhosimUtil.WithTimer() as t:
     # Determine the pre-processing scheduler so that we know which class to use
     if scheduler == 'csh':
       scriptGenerator = AllChipsScriptGenerator(trimfile, policy, extra_commands)
@@ -51,7 +50,7 @@ def DoPreproc(trimfile, imsim_config_file, extra_commands, scheduler,
                        scheduler)
       return 1
   preprocessor.InitExecEnvironment()
-  with WithTimer() as t:
+  with PhosimUtil.WithTimer() as t:
     if not preprocessor.DoPreprocessing(skip_atmoscreens=skip_atmoscreens):
       logger.critical('DoPreprocessing() failed.')
       return 1
@@ -61,7 +60,7 @@ def DoPreproc(trimfile, imsim_config_file, extra_commands, scheduler,
   if not files_to_stage:
     logger.critical('Output archive step failed.')
     return 1
-  with WithTimer() as t:
+  with PhosimUtil.WithTimer() as t:
     preprocessor.StageOutput(files_to_stage)
   t.LogWall('StageOutput')
   if not keep_scratch_dirs:
@@ -125,7 +124,7 @@ def main(trimfile, imsim_config_file, extra_commands, skip_atmoscreens,
 
 if __name__ == '__main__':
 
-  usage = 'usage: %prog [options] trimfile imsim_config_file'
+  usage = 'usage: %prog trimfile imsim_config_file [options]'
   parser = OptionParser(usage=usage)
   parser.add_option('-a', '--skip_atmoscreens', dest='skip_atmoscreens',
                     action='store_true', default=False,

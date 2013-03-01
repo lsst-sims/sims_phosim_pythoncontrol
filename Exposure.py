@@ -159,19 +159,23 @@ class Exposure(object):
         name = "eimage_%s_%s_%s_%s.fits.gz"%(self.obshistid, self.raftid, self.sensorid, self.expid)
         return path, name
 
-    def generateRawExecNames(self):
-        self._loadAmpList()
+    def generateRawExecNames(self, ampList=None):
+        if not ampList:
+            self._loadAmpList()
+            ampList = self.ampList
         names = []
-        for ampid in self.ampList:
+        for ampid in ampList:
             names.append('imsim_%s_f%s_%s_%s.fits.gz' %(self.obshistid, self.filterNum, ampid, self.expid))
         return names
 
-    def generateRawOutputNames(self):
-        self._loadAmpList()
+    def generateRawOutputNames(self, ampList=None):
+        if not ampList:
+            self._loadAmpList()
+            ampList = self.ampList
         path = "raw/v%08d-f%s/%s/%s/%s" % (int(self.obshistid), self.filterName,
                                           self.expid, self.raftid, self.sensorid)
         names = []
-        for ampid in self.ampList:
+        for ampid in ampList:
             names.append("imsim_%s_%s_%s.fits.gz"%(self.obshistid, ampid, self.expid))
         return path, names
 

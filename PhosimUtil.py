@@ -196,6 +196,39 @@ def RunWithWallTimer(func, name=None):
     logger.info('TIMER[%s]: wall: %f sec', name, interval)
   return interval, result
 
+class WithTimer:
+    """http://preshing.com/20110924/timing-your-code-using-pythons-with-statement"""
+    def __enter__(self):
+        self.startCpu = time.clock()
+        self.startWall = time.time()
+        return self
+
+    def __exit__(self, *args):
+        self.interval = []
+        self.interval.append(time.clock() - self.startCpu)
+        self.interval.append(time.time() - self.startWall)
+
+    def Print(self, name, stream):
+      stream.write('TIMER[%s]: cpu: %f sec  wall: %f sec\n' %(name, self.interval[0],
+                                                              self.interval[1]))
+
+    def PrintCpu(self, name, stream):
+      stream.write('TIMER[%s]: cpu: %f sec\n' %(name, self.interval[0]))
+
+    def PrintWall(self, name, stream):
+      stream.write('TIMER[%s]: wall: %f sec\n' %(name, self.interval[1]))
+
+    def Log(self, name):
+      logger.info('TIMER[%s]: cpu: %f sec  wall: %f sec\n', name,
+                   self.interval[0], self.interval[1])
+
+    def LogCpu(self, name):
+      logger.info('TIMER[%s]: cpu: %f sec\n', name, self.interval[0])
+
+    def LogWall(self, name):
+      logger.info('TIMER[%s]: wall: %f sec\n', name, self.interval[1])
+
+
 # ********************************************
 # LOGGERS
 # ********************************************

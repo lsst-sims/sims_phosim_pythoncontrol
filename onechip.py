@@ -5,12 +5,14 @@ ADD DOCUMENTATION!
 """
 from __future__ import with_statement
 import ConfigParser
+from distutils import version
 import logging
 from optparse import OptionParser  # Can't use argparse yet, since we must work in 2.5
 import os
 import sys
 import PhosimManager
-import phosim2 as phosim
+import PhosimUtil
+import phosim
 
 logger = logging.getLogger(__name__)
 
@@ -28,13 +30,21 @@ def ConfigureLogging(observation_id, fid, policy, log_to_stdout):
                               logfile_fullpath=log_fn)
 
 
-def DoRaytrace(raytracer, pars_archive_name):
-  raytracer.InitExecEnvironment(pars_archive_name=pars_archive_name)
+def DoRaytrace(raytracer, pars_archive_name, keep_scratch_dirs=False):
+  with PhosimUtil.WithTimer() as t:
+    raytracer.InitExecEnvironment(pars_archive_name=pars_archive_name)
+  t.LogWall('InitExecEnvironment')
+  with PhosimUtil.WithTimer() as t:
+    raytracer.DoRaytrace()
+  t.LogWall('Raytrace')
+  raytracer.CopyOutput()
+  if not keep_scratch_dirs:
+    raytracer.Cleanup()
+
 
 def main(imsim_config_file, observation_id, cid, eid, filter_num,
          pars_archive_name='pars.zip', instrument='lsst', run_e2adc=True,
-         log_to_stdout=False):
-
+         keep_scratch_dirs=False, log_to_stdout=False):
   """
   Run raytrace step for a single fid.
   """
@@ -53,16 +63,19 @@ def main(imsim_config_file, observation_id, cid, eid, filter_num,
                                             eid, filter_num,
                                             instrument=instrument,
                                             run_e2adc=run_e2adc)
-  return DoRaytrace(raytracer, pars_archive_name)
+  return DoRaytrace(raytracer, pars_archive_name, keep_scratch_dirs)
 
 
 if __name__ == '__main__':
 
-  usage = 'usage: %prog [options] imsim_config_file observation_id cid eid filter_num'
+  usage = 'usage: %prog imsim_config_file observation_id cid eid filter_num [options]'
   parser = OptionParser(usage=usage)
   parser.add_option('-e', '--no_e2adc', dest='run_e2adc', action='store_false',
                     default=True, help='Do not run e2adc step.')
   parser.add_option('-i', '--instrument', dest='instrument', default='lsst')
+  parser.add_option('-k', '--keep_scratch', dest='keep_scratch_dirs',
+                    action='store_true', default=False,
+                    help='Do not cleanup working directories.')
   parser.add_option('-l', '--logtostdout', dest='log_to_stdout',
                     action='store_true', default=False,
                     help='Write logging output to stdout instead of log file.')
@@ -81,4 +94,4 @@ if __name__ == '__main__':
   filter_num = args[4]
   sys.exit(main(imsim_config_file, obsid, cid, eid, filter_num,
                 options.pars_archive_name, options.instrument, options.run_e2adc,
-                options.log_to_stdout))
+                options.keep_scratch_dirs, options.log_to_stdout))

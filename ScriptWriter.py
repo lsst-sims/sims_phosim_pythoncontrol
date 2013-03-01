@@ -5,7 +5,7 @@ import getpass
 import logging
 import os
 
-import phosim2 as phosim
+import phosim
 
 logger = logging.getLogger(__name__)
 
