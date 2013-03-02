@@ -8,7 +8,9 @@ import shutil
 import subprocess
 import sys
 import time
+import zipfile
 
+import Exposure
 import PhosimUtil
 import ScriptWriter
 import phosim
@@ -361,7 +363,12 @@ class PhosimRaytracer(PhosimManager):
   # RAYTRACING STAGE!
 
   def __init__(self, policy, observation_id, cid, eid, filter_num,
-               instrument='lsst', run_e2adc=True):
+               instrument='lsst', run_e2adc=True, stdout_log_fn=None):
+    """
+    Args:
+      stdout_log_fn:  Name of file to which to write phosim stdout. None
+                      writes stdout to stdout.
+    """
     PhosimManager.__init__(self, policy)
     self.observation_id = observation_id
     self.cid = cid
@@ -369,6 +376,7 @@ class PhosimRaytracer(PhosimManager):
     self.filter_num = filter_num
     self.instrument = instrument
     self.run_e2adc = run_e2adc
+    self.stdout_log_fn = stdout_log_fn
     self.fid = phosim.BuildFid(self.observation_id, self.cid, self.eid)
     # Directory in which to execute this instance.
     self.my_exec_path = os.path.join(self.scratch_exec_path, self.fid)
@@ -389,9 +397,10 @@ class PhosimRaytracer(PhosimManager):
       OSError if file operation fails.
       CalledProcessError if unarchive fails.
     """
-    cmd = 'unzip -d %s %s' % (self.phosim_work_dir,
-                              os.path.join(self.my_input_path,
-                                           self.pars_archive_name))
+    cmd = 'unzip -d %s %s' % (
+      self.phosim_work_dir, os.path.join(self.my_input_path, self.pars_archive_name))
+    if self.stdout_log_fn:
+      cmd += ' >> %s' % self.stdout_log_fn
     logger.info('Executing %s' % cmd)
     subprocess.check_call(cmd, shell=True)
     self.my_raytrace_pars = os.path.join(self.phosim_work_dir,
@@ -404,11 +413,8 @@ class PhosimRaytracer(PhosimManager):
     else:
       raise OSError('Could not find file %s.' % pars_fn)
     if os.path.isfile(self.my_e2adc_pars):
-      logger.info('Appending updated directories to %s' % self.my_e2adc_pars)
-      with open(self.my_raytrace_pars, 'a') as pars:
-          pars.write('seddir %s\n' % os.path.join(self.phosim_data_dir, 'SEDs'))
-          pars.write('datadir %s\n' % self.phosim_data_dir)
-          pars.write('instrdir %s\n' % self.phosim_instr_dir)
+      logger.info('Updating directories in %s' % self.my_e2adc_pars)
+      self.UpdatePhosimDirsInPars(self.my_e2adc_pars)
     else:
       self.my_e2adc_pars = None
 
@@ -463,7 +469,19 @@ class PhosimRaytracer(PhosimManager):
     self.CheckAndDoAtmoscreens()
 
   def DoRaytrace(self, raytrace_func=phosim.jobchip):
+    """Perform raytrace step.
+
+    Args:
+      raytrace_func:  Function that performs raytracing.
+    """
     os.chdir(self.phosim_work_dir)
+    # Redirect stdout into a log file.
+    # http://stackoverflow.com/questions/4675728/redirect-stdout-to-a-file-in-python
+    if self.stdout_log_fn:
+      logger.info('Redirecting raytrace stdout to %s.', self.stdout_log_fn)
+      old = os.dup(1)
+      os.close(1)
+      os.open(self.stdout_log_fn, os.O_WRONLY|os.O_APPEND)
     logging.info('Calling %s(%s, %s, %s, %s, %s, %s, %s, instrument=%s run_e2adc=%s)',
                  raytrace_func.__name__, self.observation_id, self.cid, self.eid,
                  self.filter_num, self.phosim_output_dir, self.phosim_bin_dir,
@@ -471,28 +489,65 @@ class PhosimRaytracer(PhosimManager):
     raytrace_func(self.observation_id, self.cid, self.eid, self.filter_num,
                   self.phosim_output_dir, self.phosim_bin_dir, self.phosim_data_dir,
                   instrument=self.instrument, run_e2adc=self.run_e2adc)
+    sys.stdout.flush()
+    # Un-redirect stdout
+    if self.stdout_log_fn:
+      os.close(1)
+      os.dup(old)
+      os.close(old)
     os.chdir(self.my_exec_path)
 
-  def CopyOutput(self):
+  def CopyOutput(self, zip_rawfiles=False):
     os.chdir(self.phosim_output_dir)
-    amp_fn = os.path.join(self.phosim_instr_dir, 'segmentation.txt')
-    logger.info('Reading amp_list from %s.', amp_fn)
-    amp_list = Exposure.readAmpList(amp_fn, self.cid)
+    with open(os.path.join(self.phosim_instr_dir, 'segmentation.txt'), 'r') as ampf:
+      logger.info('Reading amp_list from %s.', ampf.name)
+      amp_list = Exposure.readAmpList(ampf, self.cid)
     exposure = Exposure.Exposure(self.observation_id,
                                  Exposure.filterToLetter(self.filter_num),
                                  '%s_%s' % (self.cid, self.eid))
     dest_path, dest_fn = exposure.generateEimageOutputName()
-    if not os.path.exists(dest_path):
-      logger.info('Creating %s.', dest_path)
-      os.makedirs(dest_path)
+    dest_path = self._PrependAndCreateFullSavePath(dest_path)
     src_fn = exposure.generateEimageExecName()
     logger.info('Copying %s to %s.', os.path.join(self.phosim_output_dir, src_fn),
                 os.path.join(dest_path, dest_fn))
     shutil.copy(src_fn, os.path.join(dest_path, dest_fn))
-    dest_path, dest_fns = exposure.generateRawOutputNames(ampList=amp_list)
+    if self.run_e2adc:
+      if zip_rawfiles or self.policy.getboolean('general', 'zip_rawfiles'):
+        self._CopyZippedRawOutput(exposure, amp_list)
+      else:
+        self._CopyRawOutput(exposure, amp_list)
+
+  def _PrependAndCreateFullSavePath(self, dest_dir):
+    """Prepends self.save_dir to dest_dir and creates it if necessary.
+
+    Returns:
+      os.path.join(self.save_path, dest_dir)
+    """
+    dest_path = os.path.join(self.save_path, dest_dir)
     if not os.path.exists(dest_path):
       logger.info('Creating %s.', dest_path)
       os.makedirs(dest_path)
+    return dest_path
+
+  def _CopyZippedRawOutput(self, exposure, amp_list):
+    dest_path, dest_fns = exposure.generateRawOutputNames(ampList=amp_list)
+    dest_path = self._PrependAndCreateFullSavePath(dest_path)
+    src_fns = exposure.generateRawExecNames(ampList=amp_list)
+    zip_base = ''
+    for s in dest_fns[0].split('.')[0].split('_'):
+      if not s.startswith('C'):
+        zip_base += '%s_' % s
+    zip_name = os.path.join(dest_path, zip_base.rstrip('_') + '.zip')
+    zipf = zipfile.ZipFile(zip_name, 'w', zipfile.ZIP_STORED)
+    for src_fn, dest_fn in zip(src_fns, dest_fns):
+      src = os.path.join(self.phosim_output_dir, src_fn)
+      logger.info('Adding %s as %s to %s.', src, dest_fn, zip_name)
+      zipf.write(src, dest_fn)
+    zipf.close()
+
+  def _CopyRawOutput(self, exposure, amp_list):
+    dest_path, dest_fns = exposure.generateRawOutputNames(ampList=amp_list)
+    dest_path = self._PrependAndCreateFullSavePath(dest_path)
     src_fns = exposure.generateRawExecNames(ampList=amp_list)
     for src_fn, dest_fn in zip(src_fns, dest_fns):
       logger.info('Copying %s to %s.', os.path.join(self.phosim_output_dir, src_fn),

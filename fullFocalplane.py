@@ -2,6 +2,7 @@
 
 """
 ADD DOCUMENTATION!
+TODO(gardnerj): Add stdout log redirect
 """
 from __future__ import with_statement
 import ConfigParser
@@ -67,7 +68,8 @@ def DoPreproc(trimfile, imsim_config_file, extra_commands, scheduler,
     preprocessor.Cleanup()
   return 0
 
-def ConfigureLogging(trimfile, policy, log_to_stdout):
+def ConfigureLogging(trimfile, policy, log_to_stdout, imsim_config_file,
+                     extra_commands=None):
   if log_to_stdout:
     log_fn = None
   else:
@@ -81,6 +83,10 @@ def ConfigureLogging(trimfile, policy, log_to_stdout):
       log_fn = '/tmp/fullFocalplane.log'
   PhosimUtil.ConfigureLogging(policy.getint('general', 'debug_level'),
                               logfile_fullpath=log_fn)
+  params_str = 'trimfile=%s\nconfig_file=%s\n' % (trimfile, imsim_config_file)
+  if extra_commands:
+    params_str += 'extra_commands=%s\n' % extra_commands
+  PhosimUtil.WriteLogHeader(__file__, params_str=params_str)
 
 def main(trimfile, imsim_config_file, extra_commands, skip_atmoscreens,
          keep_scratch_dirs, sensor_ids, log_to_stdout=False):
@@ -97,7 +103,8 @@ def main(trimfile, imsim_config_file, extra_commands, skip_atmoscreens,
     phosim_version = policy.get('general', 'phosim_version')
   else:
     phosim_version = '3.0.1'
-  ConfigureLogging(trimfile, policy, log_to_stdout)
+  ConfigureLogging(trimfile, policy, log_to_stdout,
+                   imsim_config_file, extra_commands)
   # print 'Running fullFocalPlane on: ', trimfile
   logger.info('Running fullFocalPlane on: %s ', trimfile)
 
@@ -137,7 +144,7 @@ if __name__ == '__main__':
                     help='Do not cleanup working directories.')
   parser.add_option('-l', '--logtostdout', dest='log_to_stdout',
                     action='store_true', default=False,
-                    help='Write logging outout to stdout instead of log file.')
+                    help='Write logging output to stdout instead of log file.')
   parser.add_option('-s', '--sensor', dest='sensor_ids', default='all',
                     help='Specify a list of sensor ids to use delimited by "|",'
                     ' or use "all" for all.')

@@ -1,4 +1,6 @@
 from __future__ import with_statement
+import datetime
+import getpass
 import glob
 import logging
 import os
@@ -241,3 +243,24 @@ def ConfigureLogging(debug_level, logfile_fullpath=None):
   logging.basicConfig(filename=logfile_fullpath, filemode='w', level=log_level,
                       format=log_format)
 
+def WriteLogHeader(name, params_str='', stream=None):
+  """Write log header.
+
+  Args:
+    name:        Name of script (e.g. 'fullFocalPlane', etc).  Typically,
+                 just pass __file__.
+    params_str:  A string containing any parameters you would like to document.
+    stream:      Write to this stream instead of logger.
+  """
+  header = ('\n#################################################################\n'
+            'Logfile created by: %s\n'
+            '%s\n'
+            'Run by:    %s\n'
+            'Run on:    %s\n'
+            '#################################################################\n' %
+            (name, params_str, getpass.getuser(), str(datetime.datetime.now())))
+  if stream:
+    stream.write(header)
+  else:
+    logger.info(header)
+  return

@@ -72,13 +72,20 @@ class RaytraceScriptWriter(ScriptWriter):
     logger.info('Generating Raytrace script exec section.')
     outf.write('### ---------------------------------------\n')
     outf.write('### Executable Section\n')
+    outf.write('### Note: You may add additional arguments to the onechip.py\n'
+               '###       command line through $1\n')
     outf.write('### ---------------------------------------\n\n')
-    outf.write('# Set PYTHONPATH in order to import phosim.py correctly.\n')
-    outf.write('if ($?PYTHONPATH) then\n')
-    outf.write('   setenv PYTHONPATH %s:{$PYTHONPATH}\n' % self.phosim_bin_dir)
-    outf.write('else\n')
-    outf.write('   setenv PYTHONPATH %s\n' % self.phosim_bin_dir)
-    outf.write('endif\n')
+    outf.write('if ($#argv == 1) then\n'
+               '   set extra_args = $1\n'
+               'else\n'
+               '   set extra_args = ""\n'
+               'endif\n')
+    outf.write('# Set PYTHONPATH in order to import phosim.py correctly.\n'
+               'if ($?PYTHONPATH) then\n'
+               '   setenv PYTHONPATH %s:{$PYTHONPATH}\n'
+               'else\n'
+               '   setenv PYTHONPATH %s\n'
+               'endif\n' % (self.phosim_bin_dir, self.phosim_bin_dir))
     cmd = ('%s %s %s %s %s %s %s --instrument=%s' %
            (self.python_exec, os.path.join(self.python_control_dir, 'onechip.py'),
             self.imsim_config_file, observation_id, cid, eid, filter_num,
@@ -87,6 +94,7 @@ class RaytraceScriptWriter(ScriptWriter):
       cmd += ' --no_e2adc'
     if self._pars_archive_fullpath:
       cmd += ' --pars_archive=%s' % self._pars_archive_fullpath
+    cmd += ' $extra_args'
     logger.info('Script Exec command: %s', cmd)
     outf.write('%s\n\n' % cmd)
 

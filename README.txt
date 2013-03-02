@@ -54,7 +54,7 @@ There are a few caveats to keep in mind when running phosim:
 % python26 /local/gardnerj/lsst/git/python_control/fullFocalplane.py \
   /local/gardnerj/lsst/trims/obsid99999999/metadata_99999999.dat \
   /local/gardnerj/lsst/git/python_control/phosimConfig_workstation.cfg \
-  -c /local/gardnerj/lsst/git/python_control/clouds
+  -c /local/gardnerj/lsst/git/python_control/clouds_nobackground
 
 
 
