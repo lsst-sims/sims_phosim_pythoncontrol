@@ -1,4 +1,7 @@
 #!/usr/bin/python
+
+"""Classes for writing Imsim/PhoSim execution scripts."""
+
 from __future__ import with_statement
 import datetime
 import getpass
@@ -6,6 +9,8 @@ import logging
 import os
 
 import phosim
+
+__author__ = 'Jeff Gardner (gardnerj@phys.washington.edu)'
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +46,40 @@ class ScriptWriter(object):
 
 
 class RaytraceScriptWriter(ScriptWriter):
-  """ScriptWriter for running raytrace stage."""
+  """ScriptWriter for running raytrace stage.
+
+  Subclass this for scheduler-specific implementations.
+  """
+
+  def WriteScript(self, observation_id, cid, eid, filter_num, output_dir,
+                  bin_dir, data_dir, instrument='lsst', run_e2adc=True):
+    """Write the actual script.
+
+    This is designed to be arg-compatible with phosim.jobchip().
+
+    Args:
+      observation_id: ImSim/PhoSim observation ID.
+      cid:            Chip ID.
+      eid:            Exposure ID.
+      filter_num:     Numeric identifier for filter.
+      output_dir:     phosim_output_dir
+      bin_dir:        phosim_bin_dir
+      data_dir:       phosim_data_dir
+      instrument:     'lsst', 'subaru', etc.
+      run_e2adc:      Run e2adc step after raytrace?
+    """
+    assert self._exec_script_base
+    assert output_dir == self.phosim_output_dir
+    assert bin_dir == self.phosim_bin_dir
+    assert data_dir == self.phosim_data_dir
+    script_name = '%s_%s.csh' % (self._exec_script_base, phosim.BuildFid(observation_id, cid, eid))
+    logger.info('Generating raytrace script %s', script_name)
+    with open(script_name, 'w') as outf:
+      self._WriteHeader(outf, observation_id, cid, eid, filter_num, instrument, run_e2adc)
+      self._WriteStageIn(outf, observation_id, cid, eid, filter_num, instrument, run_e2adc)
+      self._WriteExec(outf, observation_id, cid, eid, filter_num, instrument, run_e2adc)
+      self._WriteStageOut(outf, observation_id, cid, eid, filter_num, instrument, run_e2adc)
+    return
 
   def _WriteHeader(self, outf, observation_id, cid, eid, filter_num, instrument,
                            run_e2adc):
@@ -108,17 +146,52 @@ class RaytraceScriptWriter(ScriptWriter):
     outf.write('### Input Stage-out Section\n')
     outf.write('### ---------------------------------------\n\n')
 
-  def WriteScript(self, observation_id, cid, eid, filter_num, output_dir,
-                  bin_dir, data_dir, instrument='lsst', run_e2adc=True):
-    assert self._exec_script_base
-    assert output_dir == self.phosim_output_dir
-    assert bin_dir == self.phosim_bin_dir
-    assert data_dir == self.phosim_data_dir
-    script_name = '%s_%s.csh' % (self._exec_script_base, phosim.BuildFid(observation_id, cid, eid))
-    logger.info('Generating raytrace script %s', script_name)
-    with open(script_name, 'w') as outf:
-      self._WriteHeader(outf, observation_id, cid, eid, filter_num, instrument, run_e2adc)
-      self._WriteStageIn(outf, observation_id, cid, eid, filter_num, instrument, run_e2adc)
-      self._WriteExec(outf, observation_id, cid, eid, filter_num, instrument, run_e2adc)
-      self._WriteStageOut(outf, observation_id, cid, eid, filter_num, instrument, run_e2adc)
-    return
+
+class PbsRaytraceScriptWriter(RaytraceScriptWriter):
+  """An example subclass for writing PBS scripts instead of csh scripts.
+
+  This is a skeleton example of how one would implement their own
+  scheduler-specific script writer.
+  """
+
+  def ParsePbsConfig(self, policy):
+    """Parses PBS-specific variables from config file.
+
+    Add more variables to the config file under the 'pbs' section
+    and you can read them in here.
+
+    Args:
+      policy:  ConfigParser object to python_control config file.
+    """
+    self.policy = policy
+    assert self.policy.get('general','scheduler2') == 'pbs'
+    self.email = self.policy.get('pbs','email')
+    self.job_name = self.policy.get('pbs','job_name')
+    self.n_cores = self.policy.get('pbs', 'cores_per_node')
+    self.walltime = self.policy.get('pbs', 'walltime')
+
+  def _WriteHeader(self, outf, observation_id, cid, eid, filter_num,
+                   instrument, run_e2adc):
+    """Write PBS-specific header."""
+    log_fn = os.path.join(self.policy.get('general', 'log_dir'),
+                          observation_id,
+                          'fullFocalplane_%s_stdout.log' % observation_id)
+    logger.info('Generating Raytrace PBS script header.')
+    outf.write('#!/bin/csh')
+    outf.write(' -x\n') if self.debug_level >= 2 else outf.write('\n')
+    outf.write('### -------------------------------------------------------------\n')
+    outf.write('### PBS   script created by: %s\n' % getpass.getuser())
+    outf.write('###              created on: %s\n' % str(datetime.datetime.now()))
+    outf.write('### Observation ID:          %s\n' % observation_id)
+    outf.write('### Chip ID:                 %s\n' % cid)
+    outf.write('### Exposure ID:             %s\n' % eid)
+    outf.write('### Instrument:              %s\n' % instrument)
+    outf.write('### -------------------------------------------------------------\n\n')
+    outf.write('#PBS -N %s\n' % self.job_name)
+    outf.write('#PBS -M %s\n' % self.email)
+    outf.write('#PBS -j oe\n')
+    outf.write('#PBS -m a\n')
+    outf.write('#PBS -o %s\n' % log_fn)
+    outf.write('#PBS -l walltime=%s\n' % self.walltime)
+    outf.write('#PBS -l nodes=1:ppn=%s\n' % self.n_cores)
+    outf.write('\n')

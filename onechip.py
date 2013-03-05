@@ -1,7 +1,30 @@
 #!/usr/bin/python
 
-"""
-ADD DOCUMENTATION!
+"""Perform raytrace stage for a single chip/exposure combo.
+
+This script is only used for ImSim/PhoSim version == v.3.2.x.
+
+For documentation using the python_control for ImSim/PhoSim version == v.3.2.x,
+see README.txt.
+
+This script is generally executed from the shell scripts that are output from
+fullFocalplane.py.  It uses the PhosimManager.PhosimRaytracer class to
+configure the execution environment, run the raytrace step (which involves
+calling phosim.jobchip()), and copy the output files to a shared location.
+Parameters are set using the command line, or the config file.
+
+PhosimRaytracer can accomodate the nonexistance of atmosphere screens.
+If they do not exist, it simply runs phosim.GenerateAtmosphere().
+
+A few notes on options:
+  --logtostderr: (only v3.2.x and higher) By default, log output from python_controls
+                 is done via the python logging module, and directed to either
+                 log_dir in the imsim_config_file or /tmp/fullFocalplane.log
+                 if log_dir is not specified.  This option overrides this behavior
+                 and prints logging information to stdout.  Note: handling of stdout
+                 from phosim.py and the phosim binaries is done through the
+                 'log_stdout' flag in the config file.
+
 """
 from __future__ import with_statement
 import ConfigParser
@@ -13,6 +36,8 @@ import sys
 import PhosimManager
 import PhosimUtil
 import phosim
+
+__author__ = 'Jeff Gardner (gardnerj@phys.washington.edu)'
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +74,11 @@ def ConfigureLogging(observation_id, fid, policy, log_to_stdout):
 
 def DoRaytrace(raytracer, pars_archive_name, keep_scratch_dirs=False,
                zip_rawfiles=False):
+  """Perform raytrace.
+
+  Returns:
+    0 upon success.
+  """
   with PhosimUtil.WithTimer() as t:
     raytracer.InitExecEnvironment(pars_archive_name=pars_archive_name)
   t.LogWall('InitExecEnvironment')
@@ -58,13 +88,32 @@ def DoRaytrace(raytracer, pars_archive_name, keep_scratch_dirs=False,
   raytracer.CopyOutput(zip_rawfiles=zip_rawfiles)
   if not keep_scratch_dirs:
     raytracer.Cleanup()
+  return 0
 
 
 def main(imsim_config_file, observation_id, cid, eid, filter_num,
          pars_archive_name='pars.zip', instrument='lsst', run_e2adc=True,
          keep_scratch_dirs=False, log_to_stdout=False, zip_rawfiles=False):
-  """
-  Run raytrace step for a single fid.
+  """Run raytrace step for a single fid.
+
+  Args:
+    imsim_config_file: Python_control config file.
+    observation_id: ImSim/PhoSim observation ID.
+    cid:            Chip ID.
+    eid:            Exposure ID.
+    filter_num:     Numeric identifier for filter.
+    pars_archive_name: Name of archive containing preprocessing output
+                       .pars files.
+    instrument:     'lsst', 'subaru', etc.
+    run_e2adc:      Run e2adc step after raytrace?
+    keep_scratch_dirs: Do not delete the working directories at the end of
+                       execution.
+    log_to_stdout:  Write python_controls logging to stdout?
+    zip_rawfiles:   Archive the e2adc output files for this exposure into
+                    a single zip file?
+
+  Returns:
+    0 upon success
   """
   policy = ConfigParser.RawConfigParser()
   policy.read(imsim_config_file)

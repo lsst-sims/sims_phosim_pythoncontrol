@@ -1,9 +1,45 @@
 #!/usr/bin/python
 
-"""
-ADD DOCUMENTATION!
+"""Perform preprocessing and generate raytrace exec scripts for one focal plane.
+
+For documentation using the python_control for ImSim/PhoSim version <= v.3.0.x,
+see README.v3.0.x.txt.
+
+For documentation using the python_control for ImSim/PhoSim version == v.3.2.x,
+see README.txt.
+
+The behavior of this script differs depending on the version of ImSim/PhoSim.
+For versions <= v3.0.x, it functions like the original fullFocalplane.py and
+calls AllChipsScriptGenerator.makeScripts() to generate a script and some tarballs
+that can in turn be executed to run the preprocessing step (which in turn calls
+AllChipsScriptGenerator) to generate shells scripts and tarballs for performing
+the raytrace stage.  See README.v3.0.x.txt for more info.
+
+The behavior for ImSim/PhoSim version == 3.2.x is to run the preprocessing step
+directly through the class PhosimManager.PhosimPrepreprocessor (which in turn
+calls phosim.py in the phosin.git repository).  After the preprocessing is
+complete, PhosimPreprocessor generates shell scripts for the raytrace phase.
+
+A few notes on options:
+  --skip_atmoscreens: Use this to optionally skip the step to generate atmosphere
+                      screens during preprocessing and instead perform this
+                      operation at the start of the raytrace phase.  This is
+                      useful in distributed environments where the cost of
+                      transferring the atmosphere screens to the compute node
+                      is higher than recalculating them.
+
+  --logtostderr: (only v3.2.x and higher) By default, log output from python_controls
+                 is done via the python logging module, and directed to either
+                 log_dir in the imsim_config_file or /tmp/fullFocalplane.log
+                 if log_dir is not specified.  This option overrides this behavior
+                 and prints logging information to stdout.  Note: output from
+                 phosim.py and the phosim binaries are still printed to stdout.
+
 TODO(gardnerj): Add stdout log redirect
+TODO(gardnerj): Support sensor_ids argument for phosim.py.
+TODO(gardnerj): Support not running e2adc step.
 """
+
 from __future__ import with_statement
 import ConfigParser
 from distutils import version
@@ -14,11 +50,25 @@ import sys
 from AllChipsScriptGenerator import AllChipsScriptGenerator
 import PhosimManager
 import PhosimUtil
+import ScriptWriter
+
+__author__ = 'Jeff Gardner (gardnerj@phys.washington.edu)'
 
 logger = logging.getLogger(__name__)
 
 def DoPreprocOldVersion(trimfile, policy, extra_commands, scheduler, sensor_id):
-  """Do preprocessing for v3.1.0 and earlier."""
+  """Do preprocessing for v3.1.0 and earlier.
+
+  Args:
+    trimfile:          Full path to trim metadata file.
+    policy:            ConfigParser object from python_controls config file.
+    extra_commands:    Full path to extra commands or 'extraid' file.
+    scheduler:         Name of scheduler (currently, just 'csh' is supported).
+    sensor_id:         If not '', run just this single sensor ID.
+
+  Returns:
+    0 (success)
+  """
   with PhosimUtil.WithTimer() as t:
     # Determine the pre-processing scheduler so that we know which class to use
     if scheduler == 'csh':
@@ -37,15 +87,34 @@ def DoPreprocOldVersion(trimfile, policy, extra_commands, scheduler, sensor_id):
 
 def DoPreproc(trimfile, imsim_config_file, extra_commands, scheduler,
               skip_atmoscreens=False, keep_scratch_dirs=False):
-  """Do preprocessing for v3.2.0 and later."""
+  """Do preprocessing for v3.2.0 and later.
+
+  Args:
+    trimfile:          Full path to trim metadata file.
+    imsim_config_file: Full path to the python_controls config file.
+    extra_commands:    Full path to extra commands or 'extraid' file.
+    scheduler:         Name of scheduler (currently, just 'csh' is supported).
+    skip_atmoscreens:  Generate atmosphere screens in raytrace stage instead
+                       of preprocessing stage.
+    keep_scratch_dirs: Do not delete the working directories at the end of
+                       execution.
+
+  Returns:
+    0 upon success, 1 upon failure.
+  """
   policy = ConfigParser.RawConfigParser()
   policy.read(imsim_config_file)
   if scheduler == 'csh':
     preprocessor = PhosimManager.PhosimPreprocessor(policy, imsim_config_file,
                                                     trimfile, extra_commands)
   elif scheduler == 'pbs':
-      logger.critical('PBS not supported yet.')
-      return 1
+    # Construct PhosimPreprocessor with PBS-specific ScriptWriter
+    preprocessor = PhosimManager.PhosimPreprocessor(
+      policy, imsim_config_file, trimfile, extra_commands,
+      script_writer_class=ScriptWriter.PbsRaytraceScriptWriter)
+    # Read in PBS-specific config
+    preprocessor.script_writer.ParsePbsConfig(policy)
+
   else:
       logger.critical('Unknown scheduler: %s. Use -h or --help for help',
                        scheduler)
@@ -70,6 +139,14 @@ def DoPreproc(trimfile, imsim_config_file, extra_commands, scheduler,
 
 def ConfigureLogging(trimfile, policy, log_to_stdout, imsim_config_file,
                      extra_commands=None):
+  """Configures logger.
+
+  If log_to_stdout, the logger will write to stdout.  Otherwise, it will
+  write to:
+     'log_dir' in the config file, if present
+     /tmp/fullFocalplane.log if 'log_dir' is not present.
+  Stdout from phosim.py and PhoSim binaries always goes to stdout.
+  """
   if log_to_stdout:
     log_fn = None
   else:
@@ -141,10 +218,12 @@ if __name__ == '__main__':
                     help='Extra commands filename.')
   parser.add_option('-k', '--keep_scratch', dest='keep_scratch_dirs',
                     action='store_true', default=False,
-                    help='Do not cleanup working directories.')
+                    help='Do not cleanup working directories.'
+                    ' (version 3.2.x and higher only).')
   parser.add_option('-l', '--logtostdout', dest='log_to_stdout',
                     action='store_true', default=False,
-                    help='Write logging output to stdout instead of log file.')
+                    help='Write logging output to stdout instead of log file'
+                    ' (version 3.2.x and higher only).')
   parser.add_option('-s', '--sensor', dest='sensor_ids', default='all',
                     help='Specify a list of sensor ids to use delimited by "|",'
                     ' or use "all" for all.')

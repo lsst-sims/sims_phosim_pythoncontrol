@@ -1,4 +1,7 @@
 #!/usr/bin/python
+
+"""Classes for managing phosim execution."""
+
 from __future__ import with_statement
 import functools
 import glob
@@ -14,6 +17,8 @@ import Exposure
 import PhosimUtil
 import ScriptWriter
 import phosim
+
+__author__ = 'Jeff Gardner (gardnerj@phys.washington.edu)'
 
 logger = logging.getLogger(__name__)
 
@@ -35,10 +40,19 @@ def ObservationIdFromTrimfile(instance_catalog, extra_commands=None):
   return obsid
 
 class PhosimManager(object):
-  """Parent class for managing Phosim execution on distributed platforms."""
+  """Parent class for managing Phosim execution on distributed platforms.
+
+  This is intended to be a base class for stage-specific implementations
+  (e.g. preprocessor, raytrace).  Note that  _InitOutputDirectories() is
+  needs to be implemented in each subclass.
+  """
 
   def __init__(self, policy):
+    """Constructor.
 
+    Args:
+      policy:  ConfigParser object to python_control config file.
+    """
     self.policy = policy
     self.scratch_exec_path = self.policy.get('general', 'scratch_exec_path')
     self.save_path = self.policy.get('general','save_path')
@@ -56,43 +70,13 @@ class PhosimManager(object):
     self.phosim_output_dir = NotImplementedField
     self.phosim_work_dir = NotImplementedField
 
-  def _InitExecDirectories(self):
-    """Initializes directories needed for phosim execution."""
-    if not os.path.isdir(self.my_exec_path):
-      os.makedirs(self.my_exec_path)
-    PhosimUtil.ResetDirectory(self.phosim_work_dir)
-    PhosimUtil.ResetDirectory(self.phosim_output_dir)
-    if os.path.exists(self.phosim_data_dir):
-      PhosimUtil.RemoveDirOrLink(self.phosim_data_dir)
-
-  def _BuildDataDir(self):
-    """Makes a symlink to shared_data_path or unarchives data_tarball."""
-    assert not os.path.exists(self.phosim_data_dir)
-    if self.use_shared_datadir:
-      if not os.path.isdir(self.shared_data_path):
-        raise RuntimeError('shared_data_path %s does not exist.' %
-                           self.shared_data_path)
-      os.symlink(self.shared_data_path, self.phosim_data_dir)
-    else:
-      os.makedirs(self.phosim_data_dir)
-      tarball_path = os.path.join(self.shared_data_path, self.data_tarball)
-      if not os.path.isfile(tarball_path):
-        raise RuntimeError('Data tarball %s does not exist.' % tarball_path)
-      cmd = 'tar -xf %s -C %s' % (tarball_path, self.phosim_data_dir)
-      logger.info('Executing %s' % cmd)
-      subprocess.check_call(cmd, shell=True)
-
-  def _MoveInputFiles(self):
-    """Manages any input files/data needed for phosim execution."""
-    self._BuildDataDir()
-
-  def _InitOutputDirectories(self):
-    """Deletes and recreates shared output directories."""
-    raise NotImplementedError('_InitOutputDirectories() must be'
-                              ' implemented subclass.')
-
   def InitDirectories(self):
-    """Initializes execution working directories and moves input files."""
+    """Initializes execution working directories and moves input files.
+
+    Default implementations are provided for _InitExecDirectories() and
+    _MoveInputFiles(), but subclasses must implement _InitOutputDirectories().
+    """
+    logger.info('Entering InitDirectories().')
     self._InitExecDirectories()
     self._MoveInputFiles()
     self._InitOutputDirectories()
@@ -100,6 +84,13 @@ class PhosimManager(object):
   def UpdatePhosimDirsInPars(self, pars_path,
                              dirs_to_update=['datadir', 'instrdir', 'seddir']):
     """Moves pars file to temp file and rewrites it with new dirs.
+
+    One problem in wrapping the phosim execution environment the way we do
+    is that phosim actually stores the names of directories in may of its
+    .pars files.  This is problematic if we run one stage (e.g. raytracing)
+    in a different location than another (e.g. preprocessing).  Use this method
+    to update all instances of 'dirs_to_update' encountered in the .pars
+    file 'pars_path'.
 
     Args:
       pars_path:      Name of pars file to rewrite, including path.
@@ -127,6 +118,7 @@ class PhosimManager(object):
     os.remove(tmp_path)
 
   def Cleanup(self):
+    """Clean up execution directory."""
     if os.path.exists(self.phosim_work_dir):
       PhosimUtil.RemoveDirOrLink(self.phosim_work_dir)
     if os.path.exists(self.phosim_output_dir):
@@ -134,13 +126,81 @@ class PhosimManager(object):
     if os.path.exists(self.phosim_data_dir):
       PhosimUtil.RemoveDirOrLink(self.phosim_data_dir)
 
+  def _BuildDataDir(self):
+    """Makes a symlink to shared_data_path or unarchives data_tarball."""
+    assert not os.path.exists(self.phosim_data_dir)
+    if self.use_shared_datadir:
+      if not os.path.isdir(self.shared_data_path):
+        raise RuntimeError('shared_data_path %s does not exist.' %
+                           self.shared_data_path)
+      logger.info('_BuildDataDir() linking %s to %s.', self.shared_data_path,
+                  self.phosim_data_dir)
+      os.symlink(self.shared_data_path, self.phosim_data_dir)
+    else:
+      os.makedirs(self.phosim_data_dir)
+      tarball_path = os.path.join(self.shared_data_path, self.data_tarball)
+      if not os.path.isfile(tarball_path):
+        raise RuntimeError('Data tarball %s does not exist.' % tarball_path)
+      cmd = 'tar -xf %s -C %s' % (tarball_path, self.phosim_data_dir)
+      logger.info('_BuildDataDir() executing %s' % cmd)
+      subprocess.check_call(cmd, shell=True)
+
+  def _InitExecDirectories(self):
+    """Initializes directories needed for phosim execution."""
+    if not os.path.isdir(self.my_exec_path):
+      os.makedirs(self.my_exec_path)
+    PhosimUtil.ResetDirectory(self.phosim_work_dir)
+    PhosimUtil.ResetDirectory(self.phosim_output_dir)
+    if os.path.exists(self.phosim_data_dir):
+      PhosimUtil.RemoveDirOrLink(self.phosim_data_dir)
+
+  def _InitOutputDirectories(self):
+    """Deletes and recreates shared output directories."""
+    raise NotImplementedError('_InitOutputDirectories() must be'
+                              ' implemented subclass.')
+
+  def _MoveInputFiles(self):
+    """Manages any input files/data needed for phosim execution."""
+    self._BuildDataDir()
+
 
 class PhosimPreprocessor(PhosimManager):
-  """Manages Phosim preprocessing stage."""
+  """Manages Phosim preprocessing stage.
+
+  A typical use of an instance of this class is a single preprocessing
+  run as follows:
+    __init__():    Determines observation_id by reading trimfile and
+                   extra_commands file.  Intialized ScriptWriter class for
+                   writing raytrace shell scripts.
+    InitExecEnvironment(): Calls InitDirectories() and initializes
+                           PhosimFocalplane object.
+    DoPreprocessing():  Does preprocessing step.  Output is written to
+                        phosim_output_dir.
+    ArchiveRaytraceInputByExt(): Archives preprocessing output before staging.
+    StageOutput(): Copies output to 'stage_path'.
+    Cleanup():     Cleans up 'scratch_exec_path'.
+  """
 
   def __init__(self, policy, imsim_config_file, instance_catalog,
                extra_commands=None, instrument='lsst', sensor='all',
-               run_e2adc=True):
+               run_e2adc=True,
+               script_writer_class=ScriptWriter.RaytraceScriptWriter):
+    """Constructor.
+
+    Args:
+      policy:  ConfigParser object to python_control config file.
+      imsim_config_file: Python_control config file.
+      instance_catalog:  Full path to instance_catalog/trimfile
+      extra_commands:    Full path to extra_commands/extraid file.
+      instrument:        'lsst', 'subaru', etc.
+      sensor:            'all', or string of sensor ID delimited by '|'.
+      run_e2adc:         Run e2adc step after raytrace?
+      script_writer_class: Class for writing the raytrace shell script.
+                           Use this generate scheduler-specific scripts.
+
+    Returns:
+      Pointer to script_writer_class instance.
+    """
     PhosimManager.__init__(self, policy)
 
     self.imsim_config_file = imsim_config_file
@@ -166,12 +226,11 @@ class PhosimPreprocessor(PhosimManager):
     self.skip_atmoscreens = None
     staged_config_file = os.path.join(self.my_output_path,
                                       os.path.basename(self.imsim_config_file))
-    self.script_writer = ScriptWriter.RaytraceScriptWriter(
+    self.script_writer = script_writer_class(
       self.phosim_bin_dir, self.phosim_data_dir, self.phosim_output_dir,
       self.phosim_work_dir, debug_level=self.debug_level,
       python_exec=self.python_exec, python_control_dir=self.python_control_dir,
       imsim_config_file=staged_config_file)
-
 
   def InitExecEnvironment(self):
     """Initializes the execution environment.
@@ -291,6 +350,19 @@ class PhosimPreprocessor(PhosimManager):
     os.chdir(self.my_exec_path)
     return archives
 
+  def StageOutput(self, fn_list):
+    """Moves files to stage_path.
+
+    Args:
+      fn_list:  Name of files to move.
+
+    Raises:
+      OSError upon failure of move or mkdir ops
+    """
+    logger.info('Staging output files to %s: %s', self.my_output_path, fn_list)
+    PhosimUtil.StageFiles(fn_list, self.my_output_path)
+    return
+
   def _ArchiveParsByExt(self, archive_name, skip_atmoscreens):
     """Archives raytrace .pars files.
 
@@ -343,29 +415,35 @@ class PhosimPreprocessor(PhosimManager):
     exec_list.append(os.path.join(self.phosim_work_dir, archive_name))
     return exec_list
 
-  def StageOutput(self, fn_list):
-    """Moves files to stage_path.
-
-    Args:
-      fn_list:  Name of files to move.
-
-    Raises:
-      OSError upon failure of move or mkdir ops
-    """
-    logger.info('Staging output files to %s: %s', self.my_output_path, fn_list)
-    PhosimUtil.StageFiles(fn_list, self.my_output_path)
-    return
-
 class PhosimRaytracer(PhosimManager):
-  """Manages Phosim raytracing stage."""
-  # REMEMBER TO CAT THE atmosphere_<observation_id>.pars FILE
-  # INTO raytrace_<fid>.pars IF ATMOSCREEN ARE GENERATED IN
-  # RAYTRACING STAGE!
+  """Manages Phosim raytracing stage.
+
+  PhosimRaytracer can accomodate the nonexistance of atmosphere screens.
+  If they do not exist, it simply runs phosim.GenerateAtmosphere().
+
+  A typical use of an instance of this class is a single raytracing
+  run as follows:
+    __init__():     Inits class vars.
+    InitExecEnvironment(): Calls InitDirectories() generates atmosphere
+                           screens if needed.
+    DoRaytracing(): Does preprocessing step.  Output is written to
+                    phosim_output_dir.
+    CopyOutput():   Copies output to 'save_path'.
+    Cleanup():      Cleans up 'scratch_exec_path'.
+    """
 
   def __init__(self, policy, observation_id, cid, eid, filter_num,
                instrument='lsst', run_e2adc=True, stdout_log_fn=None):
-    """
+    """Constructor.
+
     Args:
+      policy:  ConfigParser object to python_control config file.
+      observation_id: ImSim/PhoSim observation ID.
+      cid:            Chip ID.
+      eid:            Exposure ID.
+      filter_num:     Numeric identifier for filter.
+      instrument:     'lsst', 'subaru', etc.
+      run_e2adc:      Run e2adc step after raytrace?
       stdout_log_fn:  Name of file to which to write phosim stdout. None
                       writes stdout to stdout.
     """
@@ -387,6 +465,107 @@ class PhosimRaytracer(PhosimManager):
     self.phosim_output_dir = os.path.join(self.my_exec_path, 'output')
     self.phosim_work_dir = os.path.join(self.my_exec_path, 'work')
     self.phosim_instr_dir = os.path.join(self.phosim_data_dir, instrument)
+
+  def InitExecEnvironment(self, pars_archive_name='pars.zip',
+                          skip_atmoscreens=False):
+    """Initializes the execution environment.
+
+    Creates working directories and constructs PhosimFocalplane instance.
+    CHANGES DIRECTORY TO my_exec_path.
+
+    Args:
+      pars_archive_name: Name of pars archive (no path).
+      skip_atmoscreens:  If True, the atmosphere generation step was skipped.
+    """
+    self.pars_archive_name=pars_archive_name
+    self.InitDirectories()
+    os.chdir(self.my_exec_path)
+    self.CheckAndDoAtmoscreens()
+
+  def CheckAndDoAtmoscreens(self):
+    """Checks for and generates atmosphere screen output if needed.
+
+    Returns:
+      True of atmoscreens existed, False if they had to be recalculated."""
+    if os.path.isfile(os.path.join(self.phosim_work_dir,
+                                   'airglowscreen_%s.fits' % self.observation_id)):
+      atmoscreen_glob = 'atmospherescreen_%s_*.fits' % self.observation_id
+      if len(glob.glob(os.path.join(self.phosim_work_dir, atmoscreen_glob))) == 70:
+        logger.info('Found existing airglowscreen and atmospherescreen files.'
+                    ' Skipping atmosphere step.')
+        return True
+    logger.info('Could not find existing airglowscreen and atmospherescreen files.'
+                ' Running PhosimFocalplane.GenerateAtmosphere().')
+    os.chdir(self.phosim_work_dir)
+    focalplane = phosim.PhosimFocalplane(self.my_exec_path,
+                                         self.phosim_output_dir,
+                                         self.phosim_work_dir,
+                                         self.phosim_bin_dir,
+                                         self.phosim_data_dir,
+                                         self.phosim_instr_dir,
+                                         grid='cluster',
+                                         grid_opts={})
+    # Set input file for GenerateAtmosphere step:
+    focalplane.inputParams = os.path.basename(self.my_raytrace_pars)
+    focalplane.GenerateAtmosphere()
+    os.chdir(self.my_exec_path)
+    return False
+
+  def DoRaytrace(self, raytrace_func=phosim.jobchip):
+    """Perform raytrace step.
+
+    Args:
+      raytrace_func:  Function that performs the raytracing.  Takes arguments
+                      like phosim.jobchip().
+    """
+    os.chdir(self.phosim_work_dir)
+    # Redirect stdout into a log file.
+    # http://stackoverflow.com/questions/4675728/redirect-stdout-to-a-file-in-python
+    if self.stdout_log_fn:
+      logger.info('Redirecting raytrace stdout to %s.', self.stdout_log_fn)
+      old = os.dup(1)
+      os.close(1)
+      os.open(self.stdout_log_fn, os.O_WRONLY|os.O_APPEND)
+    logging.info('Calling %s(%s, %s, %s, %s, %s, %s, %s, instrument=%s run_e2adc=%s)',
+                 raytrace_func.__name__, self.observation_id, self.cid, self.eid,
+                 self.filter_num, self.phosim_output_dir, self.phosim_bin_dir,
+                 self.phosim_data_dir, self.instrument, self.run_e2adc)
+    raytrace_func(self.observation_id, self.cid, self.eid, self.filter_num,
+                  self.phosim_output_dir, self.phosim_bin_dir, self.phosim_data_dir,
+                  instrument=self.instrument, run_e2adc=self.run_e2adc)
+    sys.stdout.flush()
+    # Un-redirect stdout
+    if self.stdout_log_fn:
+      os.close(1)
+      os.dup(old)
+      os.close(old)
+    os.chdir(self.my_exec_path)
+
+  def CopyOutput(self, zip_rawfiles=False):
+    """Copies output for save_path.
+
+    Args:
+      zip_rawfiles: Archive the e2adc output files for this exposure into
+                    a single zip file?
+    """
+    os.chdir(self.phosim_output_dir)
+    with open(os.path.join(self.phosim_instr_dir, 'segmentation.txt'), 'r') as ampf:
+      logger.info('Reading amp_list from %s.', ampf.name)
+      amp_list = Exposure.readAmpList(ampf, self.cid)
+    exposure = Exposure.Exposure(self.observation_id,
+                                 Exposure.filterToLetter(self.filter_num),
+                                 '%s_%s' % (self.cid, self.eid))
+    dest_path, dest_fn = exposure.generateEimageOutputName()
+    dest_path = self._PrependAndCreateFullSavePath(dest_path)
+    src_fn = exposure.generateEimageExecName()
+    logger.info('Copying %s to %s.', os.path.join(self.phosim_output_dir, src_fn),
+                os.path.join(dest_path, dest_fn))
+    shutil.copy(src_fn, os.path.join(dest_path, dest_fn))
+    if self.run_e2adc:
+      if zip_rawfiles or self.policy.getboolean('general', 'zip_rawfiles'):
+        self._CopyZippedRawOutput(exposure, amp_list)
+      else:
+        self._CopyRawOutput(exposure, amp_list)
 
   def _CopyAndModifyParsFiles(self):
     """Copy .pars files to phosim_work_dir and append proper dirs.
@@ -427,96 +606,6 @@ class PhosimRaytracer(PhosimManager):
     if not os.path.exists(self.save_path):
       os.makedirs(self.save_path)
 
-  def CheckAndDoAtmoscreens(self):
-    """Checks for and generates atmosphere screen output if needed.
-
-    Returns:
-      True of atmoscreens existed, False if they had to be recalculated."""
-    if os.path.isfile(os.path.join(self.phosim_work_dir,
-                                   'airglowscreen_%s.fits' % self.observation_id)):
-      atmoscreen_glob = 'atmospherescreen_%s_*.fits' % self.observation_id
-      if len(glob.glob(os.path.join(self.phosim_work_dir, atmoscreen_glob))) == 70:
-        logger.info('Found existing airglowscreen and atmospherescreen files.'
-                    ' Skipping atmosphere step.')
-        return True
-    logger.info('Could not find existing airglowscreen and atmospherescreen files.'
-                ' Running PhosimFocalplane.GenerateAtmosphere().')
-    os.chdir(self.phosim_work_dir)
-    focalplane = phosim.PhosimFocalplane(self.my_exec_path,
-                                         self.phosim_output_dir,
-                                         self.phosim_work_dir,
-                                         self.phosim_bin_dir,
-                                         self.phosim_data_dir,
-                                         self.phosim_instr_dir,
-                                         grid='cluster',
-                                         grid_opts={})
-    # Set input file for GenerateAtmosphere step:
-    focalplane.inputParams = os.path.basename(self.my_raytrace_pars)
-    focalplane.GenerateAtmosphere()
-    os.chdir(self.my_exec_path)
-    return False
-
-  def InitExecEnvironment(self, pars_archive_name='pars.zip',
-                          skip_atmoscreens=False):
-    """Initializes the execution environment.
-
-    Creates working directories and constructs PhosimFocalplane instance.
-    CHANGES DIRECTORY TO my_exec_path.
-    """
-    self.pars_archive_name=pars_archive_name
-    self.InitDirectories()
-    os.chdir(self.my_exec_path)
-    self.CheckAndDoAtmoscreens()
-
-  def DoRaytrace(self, raytrace_func=phosim.jobchip):
-    """Perform raytrace step.
-
-    Args:
-      raytrace_func:  Function that performs raytracing.
-    """
-    os.chdir(self.phosim_work_dir)
-    # Redirect stdout into a log file.
-    # http://stackoverflow.com/questions/4675728/redirect-stdout-to-a-file-in-python
-    if self.stdout_log_fn:
-      logger.info('Redirecting raytrace stdout to %s.', self.stdout_log_fn)
-      old = os.dup(1)
-      os.close(1)
-      os.open(self.stdout_log_fn, os.O_WRONLY|os.O_APPEND)
-    logging.info('Calling %s(%s, %s, %s, %s, %s, %s, %s, instrument=%s run_e2adc=%s)',
-                 raytrace_func.__name__, self.observation_id, self.cid, self.eid,
-                 self.filter_num, self.phosim_output_dir, self.phosim_bin_dir,
-                 self.phosim_data_dir, self.instrument, self.run_e2adc)
-    raytrace_func(self.observation_id, self.cid, self.eid, self.filter_num,
-                  self.phosim_output_dir, self.phosim_bin_dir, self.phosim_data_dir,
-                  instrument=self.instrument, run_e2adc=self.run_e2adc)
-    sys.stdout.flush()
-    # Un-redirect stdout
-    if self.stdout_log_fn:
-      os.close(1)
-      os.dup(old)
-      os.close(old)
-    os.chdir(self.my_exec_path)
-
-  def CopyOutput(self, zip_rawfiles=False):
-    os.chdir(self.phosim_output_dir)
-    with open(os.path.join(self.phosim_instr_dir, 'segmentation.txt'), 'r') as ampf:
-      logger.info('Reading amp_list from %s.', ampf.name)
-      amp_list = Exposure.readAmpList(ampf, self.cid)
-    exposure = Exposure.Exposure(self.observation_id,
-                                 Exposure.filterToLetter(self.filter_num),
-                                 '%s_%s' % (self.cid, self.eid))
-    dest_path, dest_fn = exposure.generateEimageOutputName()
-    dest_path = self._PrependAndCreateFullSavePath(dest_path)
-    src_fn = exposure.generateEimageExecName()
-    logger.info('Copying %s to %s.', os.path.join(self.phosim_output_dir, src_fn),
-                os.path.join(dest_path, dest_fn))
-    shutil.copy(src_fn, os.path.join(dest_path, dest_fn))
-    if self.run_e2adc:
-      if zip_rawfiles or self.policy.getboolean('general', 'zip_rawfiles'):
-        self._CopyZippedRawOutput(exposure, amp_list)
-      else:
-        self._CopyRawOutput(exposure, amp_list)
-
   def _PrependAndCreateFullSavePath(self, dest_dir):
     """Prepends self.save_dir to dest_dir and creates it if necessary.
 
@@ -529,7 +618,18 @@ class PhosimRaytracer(PhosimManager):
       os.makedirs(dest_path)
     return dest_path
 
+  def _CopyRawOutput(self, exposure, amp_list):
+    """Copies e2adc output from phosim_output_dir to proper dir in save_path."""
+    dest_path, dest_fns = exposure.generateRawOutputNames(ampList=amp_list)
+    dest_path = self._PrependAndCreateFullSavePath(dest_path)
+    src_fns = exposure.generateRawExecNames(ampList=amp_list)
+    for src_fn, dest_fn in zip(src_fns, dest_fns):
+      logger.info('Copying %s to %s.', os.path.join(self.phosim_output_dir, src_fn),
+                  os.path.join(dest_path, dest_fn))
+      shutil.copy(src_fn, os.path.join(dest_path, dest_fn))
+
   def _CopyZippedRawOutput(self, exposure, amp_list):
+    """Copies e2adc output from phosim_output_dir to zip in proper dir in save_path."""
     dest_path, dest_fns = exposure.generateRawOutputNames(ampList=amp_list)
     dest_path = self._PrependAndCreateFullSavePath(dest_path)
     src_fns = exposure.generateRawExecNames(ampList=amp_list)
@@ -544,13 +644,3 @@ class PhosimRaytracer(PhosimManager):
       logger.info('Adding %s as %s to %s.', src, dest_fn, zip_name)
       zipf.write(src, dest_fn)
     zipf.close()
-
-  def _CopyRawOutput(self, exposure, amp_list):
-    dest_path, dest_fns = exposure.generateRawOutputNames(ampList=amp_list)
-    dest_path = self._PrependAndCreateFullSavePath(dest_path)
-    src_fns = exposure.generateRawExecNames(ampList=amp_list)
-    for src_fn, dest_fn in zip(src_fns, dest_fns):
-      logger.info('Copying %s to %s.', os.path.join(self.phosim_output_dir, src_fn),
-                  os.path.join(dest_path, dest_fn))
-      shutil.copy(src_fn, os.path.join(dest_path, dest_fn))
-

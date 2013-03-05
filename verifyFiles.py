@@ -1,7 +1,8 @@
 #!/usr/bin/python
 
-"""
-Brief:   Python script to verify file as various stages of the ImSim workflow.
+"""Verifies file as various stages of the ImSim workflow.
+
+Only for ImSim/PhoSim versions <= 3.0.x!
 
 Date:    May 11, 2012
 Author:  Jeff Gardner, U. Washington, gardnerj@phys.washington.edu

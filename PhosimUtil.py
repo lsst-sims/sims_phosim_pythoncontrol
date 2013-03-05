@@ -1,3 +1,7 @@
+#!/usr/bin/python
+
+"""Phosim utility/convenience functions."""
+
 from __future__ import with_statement
 import datetime
 import getpass
@@ -7,6 +11,8 @@ import os
 import shutil
 import subprocess
 import time
+
+__author__ = 'Jeff Gardner (gardnerj@phys.washington.edu)'
 
 logger = logging.getLogger(__name__)
 
@@ -235,6 +241,12 @@ class WithTimer:
 # LOGGERS
 # ********************************************
 def ConfigureLogging(debug_level, logfile_fullpath=None):
+  """Configures the logging module output.
+
+  Args:
+    debug_level: If non-zero, write logging.DEBUG, else logging.INFO
+    logfile_fullpath: full path name of logging output file.
+  """
   if logfile_fullpath:
     if not os.path.exists(os.path.dirname(logfile_fullpath)):
       os.makedirs(os.path.dirname(logfile_fullpath))
