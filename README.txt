@@ -64,8 +64,8 @@ The correct procedure is to:
        c) **Copy 'default_instcat' from the phosim.git repo into
           'shared_data_path'.**
 
-  4) Edit the config file, which includes information specific to your
-     Python and storage environment.
+  4) Edit the config file (see exampleConfig_workstation.cfg), which
+     includes information specific to your Python and storage environment.
 
   5) Execute the Python control package from any directory.
 
