@@ -35,6 +35,7 @@ import os
 import sys
 import PhosimManager
 import PhosimUtil
+import PhosimVerifier
 import phosim
 
 __author__ = 'Jeff Gardner (gardnerj@phys.washington.edu)'
@@ -71,23 +72,42 @@ def ConfigureLogging(observation_id, fid, policy, log_to_stdout):
     stdout_log_fn = None
   return stdout_log_fn
 
+def LogMissingFiles(missing_files):
+  logger.critical('Verification failed with the following files missing:')
+  for fn in missing_files:
+    logger.critical('   %s', fn)
+  sys.stderr.write('Verification failed with the following files missing:\n')
+  for fn in missing_files:
+    sys.stderr.write('   %s\n' % fn)
 
 def DoRaytrace(raytracer, pars_archive_name, keep_scratch_dirs=False,
-               zip_rawfiles=False):
+               zip_rawfiles=False, verifier=None):
   """Perform raytrace.
 
   Returns:
     0 upon success.
   """
-  with PhosimUtil.WithTimer() as t:
-    raytracer.InitExecEnvironment(pars_archive_name=pars_archive_name)
-  t.LogWall('InitExecEnvironment')
-  with PhosimUtil.WithTimer() as t:
-    raytracer.DoRaytrace()
-  t.LogWall('Raytrace')
+  #with PhosimUtil.WithTimer() as t:
+  #  raytracer.InitExecEnvironment(pars_archive_name=pars_archive_name)
+  #t.LogWall('InitExecEnvironment')
+  #with PhosimUtil.WithTimer() as t:
+  #  raytracer.DoRaytrace()
+  #t.LogWall('Raytrace')
+  if verifier:
+    missing_files = verifier.VerifyScratchOutput()
+    if missing_files:
+      LogMissingFiles(missing_files)
+      return 1
+    logger.info('Scratch output files verified successfully.')
   raytracer.CopyOutput(zip_rawfiles=zip_rawfiles)
-  if not keep_scratch_dirs:
-    raytracer.Cleanup()
+  if verifier:
+    missing_files = verifier.VerifySharedOutput()
+    if missing_files:
+      LogMissingFiles(missing_files)
+      return 1
+    logger.info('Shared output files verified successfully.')
+  #if not keep_scratch_dirs:
+  #  raytracer.Cleanup()
   return 0
 
 
@@ -126,13 +146,15 @@ def main(imsim_config_file, observation_id, cid, eid, filter_num,
               ' filter_num=%s, instrument=%s run_e2adc=%s',
               imsim_config_file, fid, filter_num, instrument,
               run_e2adc)
-  raytracer = PhosimManager.PhosimRaytracer(policy, cid,
-                                            eid, observation_id, filter_num,
-                                            instrument=instrument,
-                                            run_e2adc=run_e2adc,
-                                            stdout_log_fn=stdout_log_fn)
+  raytracer = PhosimManager.Raytracer(policy, observation_id,
+                                      cid, eid, filter_num,
+                                      instrument=instrument,
+                                      run_e2adc=run_e2adc,
+                                      stdout_log_fn=stdout_log_fn)
+  verifier = PhosimVerifier.RaytraceVerifier(imsim_config_file,
+                                             observation_id, cid, eid)
   return DoRaytrace(raytracer, pars_archive_name, keep_scratch_dirs,
-                    zip_rawfiles=zip_rawfiles)
+                    zip_rawfiles=zip_rawfiles, verifier=verifier)
 
 
 if __name__ == '__main__':

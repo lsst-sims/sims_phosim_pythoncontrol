@@ -104,11 +104,11 @@ def DoPreproc(trimfile, imsim_config_file, extra_commands, scheduler,
     0 upon success, 1 upon failure.
   """
   if scheduler == 'csh':
-    preprocessor = PhosimManager.PhosimPreprocessor(imsim_config_file,
-                                                    trimfile, extra_commands)
+    preprocessor = PhosimManager.Preprocessor(imsim_config_file,
+                                              trimfile, extra_commands)
   elif scheduler == 'pbs':
     # Construct PhosimPreprocessor with PBS-specific ScriptWriter
-    preprocessor = PhosimManager.PhosimPreprocessor(
+    preprocessor = PhosimManager.Preprocessor(
       imsim_config_file, trimfile, extra_commands,
       script_writer_class=ScriptWriter.PbsRaytraceScriptWriter)
     # Read in PBS-specific config
@@ -136,13 +136,16 @@ def DoPreproc(trimfile, imsim_config_file, extra_commands, scheduler,
   t.LogWall('StageOutput')
   if not keep_scratch_dirs:
     preprocessor.Cleanup()
-  verifier = PhosimVerifier.PhosimPreprocVerifier(imsim_config_file, trimfile,
-                                                  extra_commands)
-  missing_files = verifier.VerifyOutput()
+  verifier = PhosimVerifier.PreprocVerifier(imsim_config_file, trimfile,
+                                            extra_commands)
+  missing_files = verifier.VerifySharedOutput()
   if missing_files:
     logger.critical('Verification failed with the following files missing:')
     for fn in missing_files:
       logger.critical('   %s', fn)
+    sys.stderr.write('Verification failed with the following files missing:\n')
+    for fn in missing_files:
+      sys.stderr.write('   %s\n', fn)
   else:
     logger.info('Verification completed successfully.')
   return 0

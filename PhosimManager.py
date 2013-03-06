@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import sys
 import time
+import zipfile
 
 import Exposure
 import PhosimUtil
@@ -51,7 +52,7 @@ class PhosimManager(object):
   needs to be implemented in each subclass.
   """
 
-  def __init__(self, policy):
+  def __init__(self, policy, manifest_parser_class=PhosimUtil.ManifestParser):
     """Constructor.
 
     Args:
@@ -69,6 +70,7 @@ class PhosimManager(object):
     self.python_exec = self.policy.get('general', 'python_exec')
     self.python_control_dir = self.policy.get('general', 'python_control_dir')
     self.phosim_bin_dir = self.policy.get('general', 'phosim_binDir')
+    self.manifest_parser_class = manifest_parser_class
     # The following should be defined in subclasses
     self.phosim_data_dir = NotImplementedField
     self.phosim_output_dir = NotImplementedField
@@ -168,7 +170,7 @@ class PhosimManager(object):
     self._BuildDataDir()
 
 
-class PhosimPreprocessor(PhosimManager):
+class Preprocessor(PhosimManager):
   """Manages Phosim preprocessing stage.
 
   A typical use of an instance of this class is a single preprocessing
@@ -316,14 +318,14 @@ class PhosimPreprocessor(PhosimManager):
                  self.pars_archive_name, self.skip_atmoscreens)
     manifest_fn = os.path.join(self.my_output_path, MANIFEST_FN)
     logger.info('Writing exposures to %s', manifest_fn)
-    with PhosimUtil.ManifestParser(manifest_fn, 'w') as manifest_parser:
-      manifest_parser.Write([['param', 'observation_id', self.observation_id],
-                             ['param', 'filter_num', self.filter_num],
-                             ['param', 'instrument', self.instrument],
-                             ['param', 'exec_script_base', exec_script_base],
-                             ['param', 'pars_archive_name', pars_archive_name],
-                             ['param', 'run_e2adc', self.run_e2adc],
-                             ['param', 'skip_atmoscreens', skip_atmoscreens]])
+    with self.manifest_parser_class(manifest_fn, 'w') as manifest_parser:
+      manifest_parser.Write([('param', 'observation_id', self.observation_id),
+                             ('param', 'filter_num', self.filter_num),
+                             ('param', 'instrument', self.instrument),
+                             ('param', 'exec_script_base', exec_script_base),
+                             ('param', 'pars_archive_name', pars_archive_name),
+                             ('param', 'run_e2adc', self.run_e2adc),
+                             ('param', 'skip_atmoscreens', skip_atmoscreens)])
       self.script_writer.SetExtraWriteOp(functools.partial(
         self._AppendExposureId, manifest_parser))
       PhosimUtil.RunWithWallTimer(
@@ -379,20 +381,19 @@ class PhosimPreprocessor(PhosimManager):
     Raises:
       OSError upon failure of move or mkdir ops
     """
+    manifest = []
+    with self.manifest_parser_class(os.path.join(self.my_output_path, MANIFEST_FN), 'a') as parser:
+      for fn in fn_list:
+        manifest.append(('file', parser.ManifestFileTypeByExt(fn),
+                         os.path.basename(fn)))
+      parser.Write(manifest)
     logger.info('Staging output files to %s: %s', self.my_output_path, fn_list)
     PhosimUtil.StageFiles(fn_list, self.my_output_path)
-    manifest = []
-    manifest_parser = PhosimUtil.ManifestParser()
-    for fn in fn_list:
-      manifest.append(['file', manifest_parser.ManifestFileTypeByExt(fn),
-                       os.path.basename(fn)])
-    with PhosimUtil.ManifestParser(os.path.join(self.my_output_path, MANIFEST_FN), 'a') as parser:
-      parser.Write(manifest)
     return
 
 
   def _AppendExposureId(self, parser, exposure_id):
-    parser.Write([['param', 'exposure_id', exposure_id]])
+    parser.Write([('set', 'exposure_id', exposure_id)])
 
   def _ArchiveParsByExt(self, archive_name, skip_atmoscreens):
     """Archives raytrace .pars files.
@@ -446,7 +447,7 @@ class PhosimPreprocessor(PhosimManager):
     exec_list.append(os.path.join(self.phosim_work_dir, archive_name))
     return exec_list
 
-class PhosimRaytracer(PhosimManager):
+class Raytracer(PhosimManager):
   """Manages Phosim raytracing stage.
 
   PhosimRaytracer can accomodate the nonexistance of atmosphere screens.
@@ -463,12 +464,12 @@ class PhosimRaytracer(PhosimManager):
     Cleanup():      Cleans up 'scratch_exec_path'.
     """
 
-  def __init__(self, policy, cid, eid, observation_id=None,
+  def __init__(self, policy, observation_id, cid, eid,
                filter_num=None, instrument=None, run_e2adc=None,
                stdout_log_fn=None):
     """Constructor.
 
-    If observation_id, filter_num, instrument, or run_e2adc are None,
+    If filter_num, instrument, or run_e2adc are None,
     the constructor will read these from the manifest, assumed to be
     located in stage_path/manifest.txt.
 
@@ -487,6 +488,7 @@ class PhosimRaytracer(PhosimManager):
     self.cid = cid
     self.eid = eid
     self.observation_id = observation_id
+    self.fid = phosim.BuildFid(self.observation_id, self.cid, self.eid)
     self.filter_num = filter_num
     self.instrument = instrument
     self.run_e2adc = run_e2adc
@@ -494,7 +496,6 @@ class PhosimRaytracer(PhosimManager):
     # Directory from which to grab input files
     self.my_input_path = os.path.join(self.stage_path, self.observation_id)
     self._ReadParamsFromManifestIfNeeded() # Needs my_input_path
-    self.fid = phosim.BuildFid(self.observation_id, self.cid, self.eid)
     # Directory in which to execute this instance.
     self.my_exec_path = os.path.join(self.scratch_exec_path, self.fid)
     # Phosim execution environment
@@ -506,10 +507,14 @@ class PhosimRaytracer(PhosimManager):
   def _ReadParamsFromManifestIfNeeded(self):
     if (self.observation_id is None or self.filter_num is None or
         self.instrument is None or self.run_e2adc is None):
-      with PhosimUtil.ManifestParser(os.path.join(self.my_input_path, MANIFEST_FN), 'r') as parser:
+      with self.manifest_parser_class(os.path.join(self.my_input_path, MANIFEST_FN), 'r') as parser:
         parser.Read()
-        if not self.observation_id:
-          self.observation_id = parser.GetLastByTags('param', 'observation_id')
+        obsid = parser.GetLastByTags('param', 'observation_id')
+        if obsid != self.observation_id:
+          logging.critical('Observation ID in manifest (%s) does not match this'
+                           ' class instance (%s)', obsid, self.observation_id)
+          raise RuntimeError('Observation ID in manifest (%s) does not match this'
+                             ' class instance (%s)' % (obsid, self.observation_id))
         if not self.filter_num:
           self.filter_num = parser.GetLastByTags('param', 'filter_num')
         if not self.instrument:
@@ -600,9 +605,6 @@ class PhosimRaytracer(PhosimManager):
                     a single zip file?
     """
     os.chdir(self.phosim_output_dir)
-    with open(os.path.join(self.phosim_instr_dir, 'segmentation.txt'), 'r') as ampf:
-      logger.info('Reading amp_list from %s.', ampf.name)
-      amp_list = Exposure.readAmpList(ampf, self.cid)
     exposure = Exposure.Exposure(self.observation_id,
                                  Exposure.filterToLetter(self.filter_num),
                                  '%s_%s' % (self.cid, self.eid))
@@ -613,10 +615,18 @@ class PhosimRaytracer(PhosimManager):
                 os.path.join(dest_path, dest_fn))
     shutil.copy(src_fn, os.path.join(dest_path, dest_fn))
     if self.run_e2adc:
+      amp_list = self._LoadAmpList()
       if zip_rawfiles or self.policy.getboolean('general', 'zip_rawfiles'):
         self._CopyZippedRawOutput(exposure, amp_list)
       else:
         self._CopyRawOutput(exposure, amp_list)
+
+  def _LoadAmpList(self):
+    with open(os.path.join(self.phosim_instr_dir,
+                           'segmentation.txt'), 'r') as ampf:
+      logger.info('Reading amp_list from %s.', ampf.name)
+      amp_list = Exposure.readAmpList(ampf, self.cid)
+    return amp_list
 
   def _CopyAndModifyParsFiles(self):
     """Copy .pars files to phosim_work_dir and append proper dirs.
@@ -684,11 +694,7 @@ class PhosimRaytracer(PhosimManager):
     dest_path, dest_fns = exposure.generateRawOutputNames(ampList=amp_list)
     dest_path = self._PrependAndCreateFullSavePath(dest_path)
     src_fns = exposure.generateRawExecNames(ampList=amp_list)
-    zip_base = ''
-    for s in dest_fns[0].split('.')[0].split('_'):
-      if not s.startswith('C'):
-        zip_base += '%s_' % s
-    zip_name = os.path.join(dest_path, zip_base.rstrip('_') + '.zip')
+    zip_name = os.path.join(dest_path, PhosimUtil.ZipNameFromRaw(src_fns[0]))
     zipf = zipfile.ZipFile(zip_name, 'w', zipfile.ZIP_STORED)
     for src_fn, dest_fn in zip(src_fns, dest_fns):
       src = os.path.join(self.phosim_output_dir, src_fn)

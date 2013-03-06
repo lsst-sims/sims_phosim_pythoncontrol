@@ -21,6 +21,14 @@ logger = logging.getLogger(__name__)
 # FILE STAGING AND ARCHIVE
 # ********************************************
 
+def ZipNameFromRaw(raw_fn):
+  """Returns the proper zip archive name for a raw (i.e. e2adc) fits output."""
+  zip_base = ''
+  for s in raw_fn.split('.')[0].split('_'):
+    if not s.startswith('C'):
+      zip_base += '%s_' % s
+  return zip_base.rstrip('_') + '.zip'
+
 def RemoveDirOrLink(dir_name):
   """Recusively deletes a directory if it is hard,  or soft link."""
   if os.path.islink(dir_name):

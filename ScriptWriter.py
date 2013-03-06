@@ -7,6 +7,7 @@ import datetime
 import getpass
 import logging
 import os
+import stat
 
 import phosim
 
@@ -95,10 +96,16 @@ class RaytraceScriptWriter(ScriptWriter):
       self._WriteStageIn(outf, observation_id, cid, eid, filter_num, instrument, run_e2adc)
       self._WriteExec(outf, observation_id, cid, eid, filter_num, instrument, run_e2adc)
       self._WriteStageOut(outf, observation_id, cid, eid, filter_num, instrument, run_e2adc)
+    self._ChmodPlusX(script_name)
     if self._extra_write_op:
       # Write cid_eid to manifest file.
       self._extra_write_op('%s_%s' % (cid, eid))
     return
+
+  def _ChmodPlusX(self, fn):
+    """Does a 'chmod a+x' to fn."""
+    st = os.stat(fn)
+    os.chmod(fn, st.st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
   def _WriteHeader(self, outf, observation_id, cid, eid, filter_num, instrument,
                            run_e2adc):
