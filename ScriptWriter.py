@@ -20,7 +20,16 @@ class ScriptWriter(object):
   def __init__(self, phosim_bin_dir, phosim_data_dir, phosim_output_dir,
                phosim_work_dir, debug_level=0, python_exec='python',
                python_control_dir='.', imsim_config_file=None,
-               exec_script_base=None, pars_archive_fullpath=None):
+               exec_script_base=None, pars_archive_fullpath=None,
+               extra_write_op=None):
+    """Constructor.
+
+    Args:
+      exec_script_base:  Base for written exec scripts.  Instance-specific
+                         tags will be appended after this (e.g. exposure_id).
+      extra_write_op:    Execute this op at the end of every call to WriteScript()
+                         Takes a single string as argument.
+    """
     self.phosim_bin_dir = phosim_bin_dir
     self.phosim_data_dir = phosim_data_dir
     self.phosim_output_dir = phosim_output_dir
@@ -31,6 +40,7 @@ class ScriptWriter(object):
     self.imsim_config_file = imsim_config_file
     self._exec_script_base = exec_script_base
     self._pars_archive_fullpath = pars_archive_fullpath
+    self._extra_write_op = extra_write_op
 
   def SetExecScriptBase(self, exec_script_base):
     self._exec_script_base = exec_script_base
@@ -42,7 +52,13 @@ class ScriptWriter(object):
     self._pars_archive_fullpath = name
 
   def GetParsArchive(self):
-    return self.pars_archive_fullpath
+    return self._pars_archive_fullpath
+
+  def SetExtraWriteOp(self, name):
+    self._extra_write_op = name
+
+  def GetExtraWriteOp(self):
+    return self._extra_write_op
 
 
 class RaytraceScriptWriter(ScriptWriter):
@@ -79,6 +95,9 @@ class RaytraceScriptWriter(ScriptWriter):
       self._WriteStageIn(outf, observation_id, cid, eid, filter_num, instrument, run_e2adc)
       self._WriteExec(outf, observation_id, cid, eid, filter_num, instrument, run_e2adc)
       self._WriteStageOut(outf, observation_id, cid, eid, filter_num, instrument, run_e2adc)
+    if self._extra_write_op:
+      # Write cid_eid to manifest file.
+      self._extra_write_op('%s_%s' % (cid, eid))
     return
 
   def _WriteHeader(self, outf, observation_id, cid, eid, filter_num, instrument,

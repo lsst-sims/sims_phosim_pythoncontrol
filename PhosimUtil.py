@@ -3,6 +3,7 @@
 """Phosim utility/convenience functions."""
 
 from __future__ import with_statement
+import csv
 import datetime
 import getpass
 import glob
@@ -157,21 +158,34 @@ def UnarchiveFileByExt(fn, delete_archive=False):
       logger.info('Deleting %s', fn)
       os.remove(fn)
 
-def StageFiles(source_list, dest, decompress=False, unarchive=False):
-  """Intelligently stages files to execution node.
+def StageFiles(source_list, dest, decompress=False, unarchive=False,
+               manifest_name=None):
+  """Intelligently stages files between locations.
+
+  If manifest_name is defined, the first thing this will do is write
+  a list of files that should be in the destination directory, in order
+  to make file verification easier.
 
   Args:
     source_list:  A list of full path names of files to stage to dest.
     dest:         Full path to destination directory.
     decompress:   Optionally decompress compressed files with DecompressFileByExt()
     unarchive:    Optionally unarchive archives with UnarchiveFileByExtAndDelete()
-
+    manifest_name: Optionally write a manifest of all files that were
+                   staged to dest (does not include manifest_name itself,
+                   so as to avoid Russell's paradox).
   Raises:
     OSError upon failure of file ops.
   """
-  if os.path.exists(dest):
-    shutil.rmtree(dest)
-  os.makedirs(dest)
+  if not os.path.exists(dest):
+    os.makedirs(dest)
+  if manifest_name:
+    if decompress or unarchive:
+      raise ValueError('File manifest not supported along with decompression'
+                       ' or unarchiving.')
+    with open(os.path.join(dest, manifest_name), 'w') as manf:
+      for source in source_list:
+        manf.write('%s\n', os.path.basename(source))
   for source in source_list:
     logger.info('Copying %s to %s', source, dest)
     shutil.copy(source, dest)
@@ -238,7 +252,7 @@ class WithTimer:
 
 
 # ********************************************
-# LOGGERS
+# LOGGING
 # ********************************************
 def ConfigureLogging(debug_level, logfile_fullpath=None):
   """Configures the logging module output.
@@ -276,3 +290,117 @@ def WriteLogHeader(name, params_str='', stream=None):
   else:
     logger.info(header)
   return
+
+# ********************************************
+# FILE AND PARAM MANFEST
+# ********************************************
+class ManifestParser(object):
+  """Class for reading and writing file/param manifest.
+
+  The suggested way to use this is with 'with', e.g.:
+    with ManifestParser(manifest_filename, 'r') as parser:
+      parser.Read()
+      manifest = parser.Get()
+
+  One can also supply file pointers as manifest_fp.
+  """
+  def __init__(self, fn=None, filemode=None):
+    self.fn = fn
+    self.filemode = filemode
+    self.manfp = None
+
+  def __enter__(self):
+    self.Open()
+    return self
+
+  def __exit__(self, type, value, traceback):
+    self.Close()
+
+  def Open(self, fn=None, filemode=None):
+    if not fn or not filemode:
+      if not (self.fn and self.filemode):
+        raise RuntimeError('Not enough information to open manifest.')
+      fn = self.fn
+      filemode = self.filemode
+    self.manfp = open(fn, filemode)
+    return self.manfp
+
+  def Close(self):
+    if self.manfp:
+      self.manfp.close()
+
+  def Read(self, manifest_fp=None, matcher=None):
+    """Reads 2d list from manifest_fp.
+
+    Args:
+      manifest_fp: pointer to manifest file
+      matcher:     Optional matcher func to filter results.
+
+    Returns:
+      2d list
+    """
+    if not manifest_fp:
+      manifest_fp = self.manfp
+    reader = csv.reader(manifest_fp)
+    self.list_2d = []
+    for row in reader:
+      if not matcher or matcher(row):
+        self.list_2d.append(row)
+    return self.list_2d
+
+  def Get():
+    return self.list_2d
+
+  def GetByMajor(self, major_list):
+    """Return every row of manifest whose major tag is in major_list."""
+    return self.GetByMatcher(lambda row: row if row[0] in major_list else None)
+
+  def GetAllByTags(self, major_tag, minor_tag):
+    """Return data in all rows that match major_tag and minor_tag."""
+    return self.GetByMatcher(lambda row: row[2] if row[0] == major_tag and
+                             row[1] == minor_tag else None)
+
+  def GetLastByTags(self, major_tag, minor_tag):
+    """Return data in the last row that matches major_tag and minor_tag."""
+    return self.GetByMatcher(lambda row: row[2] if row[0] in major_tag and
+                             row[1] in minor_tag else None)[-1]
+
+  def GetByMatcher(self, matcher):
+    """Return a list from manifest filtered by the function matcher.
+
+    Returns:
+      For every <row> in the manifest:
+        A list of every output from 'matcher(<row>)' that resolves as True.
+    """
+    filtered_list = []
+    for row in self.list_2d:
+      if matcher(row):
+        filtered_list.append(matcher(row))
+    return filtered_list
+
+  def ManifestFileTypeByExt(self, fn):
+    if fn.endswith('.csh') or fn.endswith('.pbs'):
+      return 'exec'
+    elif (fn.endswith('.tar') or fn.endswith('.tgz') or fn.endswith('.tar.gz') or
+          fn.endswith('.zip')):
+      return 'archive'
+    elif fn.endswith('.cfg'):
+      return 'config'
+    elif fn.endswith('.pars') or fn.endswith('.pars.gz'):
+      return 'pars'
+    return 'data'
+
+  def Write(self, list_2d, manifest_fp=None):
+    """Writes a 2d list to manifest.
+    Args:
+      list_2d:     A 2d list to write to manifest_fp.
+      manifest_fp: Optional pointer to manifest file
+    """
+    for line in list_2d:
+      logger.debug('Writing to manifest: %s', line)
+    if not manifest_fp:
+      manifest_fp = self.manfp
+    writer = csv.writer(manifest_fp)
+    writer.writerows(list_2d)
+
+

@@ -3,6 +3,7 @@
 """Classes for managing phosim execution."""
 
 from __future__ import with_statement
+import ConfigParser
 import functools
 import glob
 import logging
@@ -11,7 +12,6 @@ import shutil
 import subprocess
 import sys
 import time
-import zipfile
 
 import Exposure
 import PhosimUtil
@@ -22,22 +22,26 @@ __author__ = 'Jeff Gardner (gardnerj@phys.washington.edu)'
 
 logger = logging.getLogger(__name__)
 
+MANIFEST_FN = 'manifest.txt'
+
 @property
 def NotImplementedField(self):
   raise NotImplementedError
 
 def ObservationIdFromTrimfile(instance_catalog, extra_commands=None):
-  """Returns observation ID as read frim instance_catalog."""
+  """Returns observation ID and filter_num as read from instance_catalog."""
   obsid = None
   for line in open(instance_catalog, 'r'):
     if line.startswith('Opsim_obshistid'):
       obsid = line.strip().split()[1]
+    elif line.startswith('Opsim_filter'):
+      filter_num = line.strip().split()[1]
   assert obsid
   if extra_commands:
     for line in open(extra_commands, 'r'):
       if line.startswith('extraid'):
         obsid += line.split()[1]
-  return obsid
+  return obsid, filter_num
 
 class PhosimManager(object):
   """Parent class for managing Phosim execution on distributed platforms.
@@ -181,7 +185,7 @@ class PhosimPreprocessor(PhosimManager):
     Cleanup():     Cleans up 'scratch_exec_path'.
   """
 
-  def __init__(self, policy, imsim_config_file, instance_catalog,
+  def __init__(self, imsim_config_file, instance_catalog,
                extra_commands=None, instrument='lsst', sensor='all',
                run_e2adc=True,
                script_writer_class=ScriptWriter.RaytraceScriptWriter):
@@ -201,6 +205,8 @@ class PhosimPreprocessor(PhosimManager):
     Returns:
       Pointer to script_writer_class instance.
     """
+    policy = ConfigParser.RawConfigParser()
+    policy.read(imsim_config_file)
     PhosimManager.__init__(self, policy)
 
     self.imsim_config_file = imsim_config_file
@@ -210,8 +216,8 @@ class PhosimPreprocessor(PhosimManager):
     self.sensor = sensor
 
     self.run_e2adc = run_e2adc
-    self.observation_id = ObservationIdFromTrimfile(instance_catalog,
-                                                    extra_commands=extra_commands)
+    self.observation_id, self.filter_num = ObservationIdFromTrimfile(
+      instance_catalog, extra_commands=extra_commands)
     # Directory in which to execute this instance.
     self.my_exec_path = os.path.join(self.scratch_exec_path, self.observation_id)
     # Directory to which to copy preprocessing output upon completion.
@@ -308,9 +314,22 @@ class PhosimPreprocessor(PhosimManager):
     self.skip_atmoscreens = skip_atmoscreens
     logger.debug('Set self.pars_archive_name=%s  self.skip_atmoscreens=%s',
                  self.pars_archive_name, self.skip_atmoscreens)
-    PhosimUtil.RunWithWallTimer(
-      functools.partial(self.focalplane.ScheduleRaytrace, self.instrument, self.run_e2adc),
-      name=name)
+    manifest_fn = os.path.join(self.my_output_path, MANIFEST_FN)
+    logger.info('Writing exposures to %s', manifest_fn)
+    with PhosimUtil.ManifestParser(manifest_fn, 'w') as manifest_parser:
+      manifest_parser.Write([['param', 'observation_id', self.observation_id],
+                             ['param', 'filter_num', self.filter_num],
+                             ['param', 'instrument', self.instrument],
+                             ['param', 'exec_script_base', exec_script_base],
+                             ['param', 'pars_archive_name', pars_archive_name],
+                             ['param', 'run_e2adc', self.run_e2adc],
+                             ['param', 'skip_atmoscreens', skip_atmoscreens]])
+      self.script_writer.SetExtraWriteOp(functools.partial(
+        self._AppendExposureId, manifest_parser))
+      PhosimUtil.RunWithWallTimer(
+        functools.partial(self.focalplane.ScheduleRaytrace, self.instrument, self.run_e2adc),
+        name=name)
+    logger.info('Closed %s', manifest_fn)
     os.chdir(self.my_exec_path)
     return True
 
@@ -350,18 +369,30 @@ class PhosimPreprocessor(PhosimManager):
     os.chdir(self.my_exec_path)
     return archives
 
-  def StageOutput(self, fn_list):
+  def StageOutput(self, fn_list, manifest_name='filemanifest.txt'):
     """Moves files to stage_path.
 
     Args:
       fn_list:  Name of files to move.
+      manifest_name: Name of file containing list of output files.
 
     Raises:
       OSError upon failure of move or mkdir ops
     """
     logger.info('Staging output files to %s: %s', self.my_output_path, fn_list)
     PhosimUtil.StageFiles(fn_list, self.my_output_path)
+    manifest = []
+    manifest_parser = PhosimUtil.ManifestParser()
+    for fn in fn_list:
+      manifest.append(['file', manifest_parser.ManifestFileTypeByExt(fn),
+                       os.path.basename(fn)])
+    with PhosimUtil.ManifestParser(os.path.join(self.my_output_path, MANIFEST_FN), 'a') as parser:
+      parser.Write(manifest)
     return
+
+
+  def _AppendExposureId(self, parser, exposure_id):
+    parser.Write([['param', 'exposure_id', exposure_id]])
 
   def _ArchiveParsByExt(self, archive_name, skip_atmoscreens):
     """Archives raytrace .pars files.
@@ -432,9 +463,14 @@ class PhosimRaytracer(PhosimManager):
     Cleanup():      Cleans up 'scratch_exec_path'.
     """
 
-  def __init__(self, policy, observation_id, cid, eid, filter_num,
-               instrument='lsst', run_e2adc=True, stdout_log_fn=None):
+  def __init__(self, policy, cid, eid, observation_id=None,
+               filter_num=None, instrument=None, run_e2adc=None,
+               stdout_log_fn=None):
     """Constructor.
+
+    If observation_id, filter_num, instrument, or run_e2adc are None,
+    the constructor will read these from the manifest, assumed to be
+    located in stage_path/manifest.txt.
 
     Args:
       policy:  ConfigParser object to python_control config file.
@@ -448,23 +484,38 @@ class PhosimRaytracer(PhosimManager):
                       writes stdout to stdout.
     """
     PhosimManager.__init__(self, policy)
-    self.observation_id = observation_id
     self.cid = cid
     self.eid = eid
+    self.observation_id = observation_id
     self.filter_num = filter_num
     self.instrument = instrument
     self.run_e2adc = run_e2adc
     self.stdout_log_fn = stdout_log_fn
+    # Directory from which to grab input files
+    self.my_input_path = os.path.join(self.stage_path, self.observation_id)
+    self._ReadParamsFromManifestIfNeeded() # Needs my_input_path
     self.fid = phosim.BuildFid(self.observation_id, self.cid, self.eid)
     # Directory in which to execute this instance.
     self.my_exec_path = os.path.join(self.scratch_exec_path, self.fid)
-    # Directory from which to grab input files
-    self.my_input_path = os.path.join(self.stage_path, self.observation_id)
     # Phosim execution environment
     self.phosim_data_dir = os.path.join(self.my_exec_path, 'data')
     self.phosim_output_dir = os.path.join(self.my_exec_path, 'output')
     self.phosim_work_dir = os.path.join(self.my_exec_path, 'work')
     self.phosim_instr_dir = os.path.join(self.phosim_data_dir, instrument)
+
+  def _ReadParamsFromManifestIfNeeded(self):
+    if (self.observation_id is None or self.filter_num is None or
+        self.instrument is None or self.run_e2adc is None):
+      with PhosimUtil.ManifestParser(os.path.join(self.my_input_path, MANIFEST_FN), 'r') as parser:
+        parser.Read()
+        if not self.observation_id:
+          self.observation_id = parser.GetLastByTags('param', 'observation_id')
+        if not self.filter_num:
+          self.filter_num = parser.GetLastByTags('param', 'filter_num')
+        if not self.instrument:
+          self.instrument = parser.GetLastByTags('param', 'instrument')
+        if self.run_e2adc is None:
+          self.run_e2adc = True if parser.GetLastByTags('param', 'run_e2adc') == 'True' else False
 
   def InitExecEnvironment(self, pars_archive_name='pars.zip',
                           skip_atmoscreens=False):
@@ -526,10 +577,10 @@ class PhosimRaytracer(PhosimManager):
       old = os.dup(1)
       os.close(1)
       os.open(self.stdout_log_fn, os.O_WRONLY|os.O_APPEND)
-    logging.info('Calling %s(%s, %s, %s, %s, %s, %s, %s, instrument=%s run_e2adc=%s)',
-                 raytrace_func.__name__, self.observation_id, self.cid, self.eid,
-                 self.filter_num, self.phosim_output_dir, self.phosim_bin_dir,
-                 self.phosim_data_dir, self.instrument, self.run_e2adc)
+    logger.info('Calling %s(%s, %s, %s, %s, %s, %s, %s, instrument=%s run_e2adc=%s)',
+                raytrace_func.__name__, self.observation_id, self.cid, self.eid,
+                self.filter_num, self.phosim_output_dir, self.phosim_bin_dir,
+                self.phosim_data_dir, self.instrument, self.run_e2adc)
     raytrace_func(self.observation_id, self.cid, self.eid, self.filter_num,
                   self.phosim_output_dir, self.phosim_bin_dir, self.phosim_data_dir,
                   instrument=self.instrument, run_e2adc=self.run_e2adc)

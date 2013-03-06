@@ -126,8 +126,8 @@ def main(imsim_config_file, observation_id, cid, eid, filter_num,
               ' filter_num=%s, instrument=%s run_e2adc=%s',
               imsim_config_file, fid, filter_num, instrument,
               run_e2adc)
-  raytracer = PhosimManager.PhosimRaytracer(policy, observation_id, cid,
-                                            eid, filter_num,
+  raytracer = PhosimManager.PhosimRaytracer(policy, cid,
+                                            eid, observation_id, filter_num,
                                             instrument=instrument,
                                             run_e2adc=run_e2adc,
                                             stdout_log_fn=stdout_log_fn)

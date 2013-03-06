@@ -50,6 +50,7 @@ import sys
 from AllChipsScriptGenerator import AllChipsScriptGenerator
 import PhosimManager
 import PhosimUtil
+import PhosimVerifier
 import ScriptWriter
 
 __author__ = 'Jeff Gardner (gardnerj@phys.washington.edu)'
@@ -102,17 +103,17 @@ def DoPreproc(trimfile, imsim_config_file, extra_commands, scheduler,
   Returns:
     0 upon success, 1 upon failure.
   """
-  policy = ConfigParser.RawConfigParser()
-  policy.read(imsim_config_file)
   if scheduler == 'csh':
-    preprocessor = PhosimManager.PhosimPreprocessor(policy, imsim_config_file,
+    preprocessor = PhosimManager.PhosimPreprocessor(imsim_config_file,
                                                     trimfile, extra_commands)
   elif scheduler == 'pbs':
     # Construct PhosimPreprocessor with PBS-specific ScriptWriter
     preprocessor = PhosimManager.PhosimPreprocessor(
-      policy, imsim_config_file, trimfile, extra_commands,
+      imsim_config_file, trimfile, extra_commands,
       script_writer_class=ScriptWriter.PbsRaytraceScriptWriter)
     # Read in PBS-specific config
+    policy = ConfigParser.RawConfigParser()
+    policy.read(imsim_config_file)
     preprocessor.script_writer.ParsePbsConfig(policy)
 
   else:
@@ -135,6 +136,15 @@ def DoPreproc(trimfile, imsim_config_file, extra_commands, scheduler,
   t.LogWall('StageOutput')
   if not keep_scratch_dirs:
     preprocessor.Cleanup()
+  verifier = PhosimVerifier.PhosimPreprocVerifier(imsim_config_file, trimfile,
+                                                  extra_commands)
+  missing_files = verifier.VerifyOutput()
+  if missing_files:
+    logger.critical('Verification failed with the following files missing:')
+    for fn in missing_files:
+      logger.critical('   %s', fn)
+  else:
+    logger.info('Verification completed successfully.')
   return 0
 
 def ConfigureLogging(trimfile, policy, log_to_stdout, imsim_config_file,
@@ -152,7 +162,7 @@ def ConfigureLogging(trimfile, policy, log_to_stdout, imsim_config_file,
   else:
     if policy.has_option('general', 'log_dir'):
       # Log to file in log_dir
-      obsid = PhosimManager.ObservationIdFromTrimfile(
+      obsid, filter_num = PhosimManager.ObservationIdFromTrimfile(
         trimfile, extra_commands=options.extra_commands)
       log_dir = os.path.join(policy.get('general', 'log_dir'), obsid)
       log_fn = os.path.join(log_dir, 'fullFocalplane_%s.log' % obsid)
