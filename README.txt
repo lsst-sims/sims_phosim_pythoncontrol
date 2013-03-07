@@ -1,22 +1,38 @@
+===============================================
+Python ImSim Control Files
+===============================================
+
 This file contains instructions for ImSim/PhoSim v3.2.x and later.
 
 **For running ImSim/PhoSim v-3.0.x and earlier, see README.v3.0.x.txt.**
 
-==========================
-Python ImSim Control Files
-==========================
-
 The Python control files have been completely reworked and greatly
 simplified since v3.0.x.
+
+==========================
+REQUIREMENTS
+==========================
+1. The proper revision of PhoSim.
+2. The "fitsverify" executable from the package
+   http://heasarc.gsfc.nasa.gov/docs/software/ftools/fitsverify/
+   must be in your path for the raytracing stage (see "FILE VERIFICATION"
+   below).  If this is problematic, its usage can be disabled
+   (see "FILE VERIFICATION" below).
+3. Python 2.5 or later
+
+
+==========================
+CONFIGURATION
+==========================
 
 These files are for use with the LSST Image Simulator ("ImSim" or
 "PhoSim") v3.2.x and greater.  They do not need to be in the PhoSim
 source tree when they are executed.  However, **you must be able
-to import phosim.py in the phosim.git repository root.** See step
-3) below for how to do this.
+to import phosim.py (located in the phosim.git repository root).**
+See step 3) below for how to do this.
 
 The correct procedure is to:
-  1) Check out proper revision of phosim.git
+  1) Check out a tagged revision of phosim.git
   2) Check out a compatible revision of the Python control package
      (The compatable version of the python control package will share
       the same tag with PhoSim: e.g.
@@ -28,7 +44,7 @@ The correct procedure is to:
        % cd python_control
        % git checkout refs/tags/v3.2.3
 
-  3) Adjust your configuration so that you can import python.py from
+  3) Adjust your configuration so that you can import 'phosim.py' from
      the phosim.git repository.  This can be done a few different
      ways:
        a) (recommended) Configure your PYTHONPATH environment to point
@@ -41,6 +57,8 @@ The correct procedure is to:
           will work because phosim.py has no other dependencies.
 
   4) Build a 'data' directory for holding SED and instrument data.
+     You can also download Jeff's current copy from:
+        http://www.phys.washington.edu/users/gardnerj/files/imsim/data_phosim_06112012.tar
      Phosim v3.2.x and greater expects the "data" directory to be
      organized in a specific way.  This will be 'shared_data_path'
      in your config file:
@@ -56,7 +74,7 @@ The correct procedure is to:
             cosmic_rays/
  	    sky/
 	    [instrument: e.g. "lsst", "subaru"]/
-     In order to build this directory, do all of the the following:
+     In order to build this directory, do *all* of the the following:
        a) Copy the 'data' directory from phosim.git repo to a shared
           location (where you will point to it with 'shared_data_path')
        b) Copy 'agnSED', 'flatSED', 'galaxySED', 'ssmSED', and
@@ -67,17 +85,8 @@ The correct procedure is to:
   4) Edit the config file (see exampleConfig_workstation.cfg), which
      includes information specific to your Python and storage environment.
 
-  5) Execute the Python control package from any directory.
-
-==========================
-REQUIREMENTS
-==========================
-1. The proper revision of PhoSim.
-2. The "fitsverify" executable from the package
-   http://heasarc.gsfc.nasa.gov/docs/software/ftools/fitsverify/
-   must be in your path for the raytracing stage (see below).
-3. Python 2.5 or later
-
+  5) Execute the Python control package from any directory
+     (See "USAGE" below).
 
 ==========================
 REVISIONS
@@ -85,6 +94,25 @@ REVISIONS
 
 The tags of the Python control package match the ImSim/PhoSim tag with
 which they are designed to interface.
+
+
+==========================
+LOG OUTPUT
+==========================
+
+Python_controls uses the Python 'logging' module instead of writing
+to stdout.  Logs are stored in 'log_dir'/<observation_id> where
+'log_dir' is specified in the config file.  You can override this
+behavior by using the commandline flag --logtostdout.  The names
+of the log files in that directory will be as follows:
+  fullFocalplane_<observation_id>.log,
+  onechip_<observation_id>_<chip_id>_<exposure_id>.log
+  onechip_<observation_id>_<chip_id>_<exposure_id>_stdout.log
+
+Stdout from the raytracing portion of phosim (i.e. from phosim.py and
+the 'raytrace' and 'e2adc' executables) is also redirected to a
+separate log file (also in 'log_dir'/<observation_id>) if
+'log_stdout' is set to 'true' in the config file.
 
 
 ==========================
@@ -108,8 +136,10 @@ You may use absolute paths for any of the arguments, e.g.:
 It does not matter which directory you execute fullFocalPlane.py
 from.  It's execution environment is governed by the config file.
 
-Execution will occur in 'scratch_exec_path'.  The subdirectories
-'data', 'work', and 'output' will be created here.
+Execution will occur in 'scratch_exec_path' (set in the config fie).
+The phosim subdirectories 'data', 'work', and 'output' will be created
+here (in phosim.py these are stored in the variables 'datadir',
+'workdir', and 'outputdir').
 
 Output from this stage will be stored in the following locations:
   'stage_path'/<observation_id>: All data files required for raytrace
@@ -125,18 +155,24 @@ Each raytrace shell script is stored in 'stage_path'/<observation_id>
 and a manifest of the shell scripts is listed in the file
   'stage_path'/<observation_id>/execmanifest_raytrace_<observation_id>.txt
 
-A simple way to execute the raytrace scripts in parallel on <ncores>
-cores is:
+To raytrace a chip/exposure, simple execute the corresponding shell
+script.  A simple way to execute the raytrace scripts in parallel on
+<ncores> cores is:
   % cat execmanifest_raytrace_<observation_id>.txt | xargs -P <ncores> -n 1 csh
 (See http://blog.labrat.info/20100429/using-xargs-to-do-parallel-processing/)
 
 It does not matter which directory you execute the shell scripts from.
 Their execution environment is governed by the config file.
 
-If you take a peek inside the shells scripts. You will see that they
+If you take a peek inside the shell scripts, you will see that they
 provide a thin wrapper around onechip.py.  For diagnostics and
 testing, you may wish to run onechip.py by hand.  See that file for
 more documentation or run 'onechip.py -h'.
+
+Note the shell script will append $1 (the first command-line argument)
+to the onechip.py command line.  To append multiple arguments, enclose
+them in double-quotes, e.g.
+  exec_raytrace_999999992_R22_S00_E000.csh "-e -k -l"
 
 Output from the raytracing stage will be stored in the following
 locations:
@@ -149,27 +185,27 @@ IMPORTANT: When something goes wrong, try looking in the logs, as
 
 
 ==========================
-VERIFYING FILES
+FILE VERIFICATION
 ==========================
 
-"verifyFiles.py" can be used to verify the output of both the
-preprocessing and raytrace stages.  The control scripts automatically
-verify proprocessing output (in shared storage) as well as raytracing
-output (on the execution node).  The details for parsing the output
-from each of these steps is given above.
+"verifyFiles.py" does not currently work with 3.2.x.  However, files
+are verified automatically by fullFocalPlane.py and onechip.py.  The
+former verifies preprocessing output after it has been copies to
+<stage_path>.  The latter verifies raytrace output both in
+the <scratch_exec_path>/output (it also does a fitsverify here)
+and after the output has been copies to shared storage (<save_path>).
 
-The control scripts do not automatically verify that an entire focalplane
-has completed the raytracing stage and been stored in <savePath>.  To
-do this, you can execute:
-  verifyFiles.py <obshistid> <filter> <savePath>
+The fitsverify executable must be in your path for raytrace output
+verification to work.  If this is a problem, you can optionally skip
+the fitsverify step by invoking onechip.py with '--no_fitsverify'.
 
-Note that <savePath> also has to include "imSim/PT1.2" if it is
-present (i.e. it should be the path to the "eimage" and "raw"
-directories).
+File verification is done via the classes in PhosimVerifier.py.
+Eventually, Jeff will write an updated wrapper script for it.
 
-============================
-SCHEDULER-SPECIFIC EXECUTION
-============================
+
+===============================
+SCHEDULER-SPECIFIC ENVIRONMENTS
+===============================
 
 As an example of implementing scheduler-specific versions, a skeleton
 for 'pbs' has been provided.  In fullFocalplane.py:DoPreproc(), one

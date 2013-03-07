@@ -135,7 +135,7 @@ class RaytraceVerifier(PhosimVerifier):
       self.instrument = parser.GetLastByTags('param', 'instrument')
       self.run_e2adc = True if parser.GetLastByTags('param', 'run_e2adc') == 'True' else False
 
-  def VerifyScratchOutput(self):
+  def VerifyScratchOutput(self, fitsverify=True):
     """Verifies raytrace output in phosim_output_dir.
 
     In addition to testing for existence, runs fitsverify on all .fits output.
@@ -145,13 +145,19 @@ class RaytraceVerifier(PhosimVerifier):
       output is written to logging.ERROR.
     """
     logger.info('Verifying output files in %s.', self.phosim_output_dir)
-    missing_files = self._VerifyFitsInDir(self.phosim_output_dir,
-                                          self.exposure.generateEimageExecName())
+    if fitsverify:
+      logger.info('Verifying FITS contents with fitsverify.')
+      verify_func = self._VerifyFitsInDir
+    else:
+      logger.info('Verifying existence of FITS files and not their contents.')
+      verify_func = self._VerifyFileInDir
+    missing_files = verify_func(self.phosim_output_dir,
+                                self.exposure.generateEimageExecName())
     if self.run_e2adc:
       amp_list = self._LoadAmpList()
       raw_fns = self.exposure.generateRawExecNames(ampList=amp_list)
       for fn in raw_fns:
-        missing_files.extend(self._VerifyFitsInDir(self.phosim_output_dir, fn))
+        missing_files.extend(verify_func(self.phosim_output_dir, fn))
     return missing_files
 
   def VerifySharedOutput(self):

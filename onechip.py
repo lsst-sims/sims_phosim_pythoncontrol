@@ -81,39 +81,42 @@ def LogMissingFiles(missing_files):
     sys.stderr.write('   %s\n' % fn)
 
 def DoRaytrace(raytracer, pars_archive_name, keep_scratch_dirs=False,
-               zip_rawfiles=False, verifier=None):
+               zip_rawfiles=False, verifier=None, copy_output=True,
+               fitsverify=True):
   """Perform raytrace.
 
   Returns:
     0 upon success.
   """
-  #with PhosimUtil.WithTimer() as t:
-  #  raytracer.InitExecEnvironment(pars_archive_name=pars_archive_name)
-  #t.LogWall('InitExecEnvironment')
-  #with PhosimUtil.WithTimer() as t:
-  #  raytracer.DoRaytrace()
-  #t.LogWall('Raytrace')
+  with PhosimUtil.WithTimer() as t:
+    raytracer.InitExecEnvironment(pars_archive_name=pars_archive_name)
+  t.LogWall('InitExecEnvironment')
+  with PhosimUtil.WithTimer() as t:
+    raytracer.DoRaytrace()
+  t.LogWall('Raytrace')
   if verifier:
-    missing_files = verifier.VerifyScratchOutput()
+    missing_files = verifier.VerifyScratchOutput(fitsverify=fitsverify)
     if missing_files:
       LogMissingFiles(missing_files)
       return 1
     logger.info('Scratch output files verified successfully.')
-  raytracer.CopyOutput(zip_rawfiles=zip_rawfiles)
-  if verifier:
-    missing_files = verifier.VerifySharedOutput()
-    if missing_files:
-      LogMissingFiles(missing_files)
-      return 1
-    logger.info('Shared output files verified successfully.')
-  #if not keep_scratch_dirs:
-  #  raytracer.Cleanup()
+  if copy_output:
+    raytracer.CopyOutput(zip_rawfiles=zip_rawfiles)
+    if verifier:
+      missing_files = verifier.VerifySharedOutput()
+      if missing_files:
+        LogMissingFiles(missing_files)
+        return 1
+      logger.info('Shared output files verified successfully.')
+    if not keep_scratch_dirs:
+      raytracer.Cleanup()
   return 0
 
 
 def main(imsim_config_file, observation_id, cid, eid, filter_num,
          pars_archive_name='pars.zip', instrument='lsst', run_e2adc=True,
-         keep_scratch_dirs=False, log_to_stdout=False, zip_rawfiles=False):
+         keep_scratch_dirs=False, log_to_stdout=False, zip_rawfiles=False,
+         copy_output=True, fitsverify=True):
   """Run raytrace step for a single fid.
 
   Args:
@@ -131,6 +134,8 @@ def main(imsim_config_file, observation_id, cid, eid, filter_num,
     log_to_stdout:  Write python_controls logging to stdout?
     zip_rawfiles:   Archive the e2adc output files for this exposure into
                     a single zip file?
+    copy_output:    Copy output from scratch to shared storage?
+    fitsverify:     Run fitsverify on output FITS files?
 
   Returns:
     0 upon success
@@ -154,19 +159,26 @@ def main(imsim_config_file, observation_id, cid, eid, filter_num,
   verifier = PhosimVerifier.RaytraceVerifier(imsim_config_file,
                                              observation_id, cid, eid)
   return DoRaytrace(raytracer, pars_archive_name, keep_scratch_dirs,
-                    zip_rawfiles=zip_rawfiles, verifier=verifier)
+                    zip_rawfiles=zip_rawfiles, verifier=verifier,
+                    copy_output=copy_output, fitsverify=fitsverify)
 
 
 if __name__ == '__main__':
 
   usage = 'usage: %prog imsim_config_file observation_id cid eid filter_num [options]'
   parser = OptionParser(usage=usage)
+  parser.add_option('-c', '--no_copy_output', dest='copy_output', action='store_false',
+                    default=True, help='Do no copy output to shared storage')
   parser.add_option('-e', '--no_e2adc', dest='run_e2adc', action='store_false',
                     default=True, help='Do not run e2adc step.')
+  parser.add_option('-f', '--no_fitsverify', dest='fitsverify', action='store_false',
+                    default=True, help='Do not verify FITS file contents'
+                    ' with fitsverify.')
   parser.add_option('-i', '--instrument', dest='instrument', default='lsst')
   parser.add_option('-k', '--keep_scratch', dest='keep_scratch_dirs',
                     action='store_true', default=False,
-                    help='Do not cleanup working directories.')
+                    help='Do not cleanup working directories if we are copying'
+                    ' output to shared storage.')
   parser.add_option('-l', '--logtostdout', dest='log_to_stdout',
                     action='store_true', default=False,
                     help='Write logging output to stdout instead of log file'
@@ -192,4 +204,4 @@ if __name__ == '__main__':
   sys.exit(main(imsim_config_file, obsid, cid, eid, filter_num,
                 options.pars_archive_name, options.instrument, options.run_e2adc,
                 options.keep_scratch_dirs, options.log_to_stdout,
-                options.zip_rawfiles))
+                options.zip_rawfiles, options.copy_output, options.fitsverify))

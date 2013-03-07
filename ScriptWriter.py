@@ -140,7 +140,7 @@ class RaytraceScriptWriter(ScriptWriter):
                '###       command line through $1\n')
     outf.write('### ---------------------------------------\n\n')
     outf.write('if ($#argv == 1) then\n'
-               '   set extra_args = $1\n'
+               '   set extra_args = "$1"\n'
                'else\n'
                '   set extra_args = ""\n'
                'endif\n')
