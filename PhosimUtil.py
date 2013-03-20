@@ -353,10 +353,10 @@ class ManifestParser(object):
     self.list_2d = []
     for row in reader:
       if not matcher or matcher(row):
-        self.list_2d.append(row)
+        self.list_2d.append(tuple(row))
     return self.list_2d
 
-  def Get():
+  def Get(self):
     return self.list_2d
 
   def GetByMajor(self, major_list):
