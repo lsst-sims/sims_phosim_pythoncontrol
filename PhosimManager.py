@@ -66,7 +66,6 @@ class PhosimManager(object):
     self.shared_data_path = self.policy.get('general', 'shared_data_path')
     self.data_tarball = self.policy.get('general', 'data_tarball')
     self.debug_level = self.policy.getint('general','debug_level')
-    self.regen_atmoscreens = self.policy.getboolean('general','regen_atmoscreens')
     self.python_exec = self.policy.get('general', 'python_exec')
     self.python_control_dir = self.policy.get('general', 'python_control_dir')
     self.phosim_bin_dir = self.policy.get('general', 'phosim_binDir')
