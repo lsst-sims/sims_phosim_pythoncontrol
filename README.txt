@@ -127,7 +127,7 @@ Preprocessing:
 Run 'fullFocalplane.py' to perform the preprocessing step and to
 generate shell scripts for running the raytracing stage for each chip
 (one shell script per chip).  Run 'fullFocalplane.py -h' for usage.
-You may use absolute paths for any of the arguments, e.g.:
+You may use either relative or absolute paths for any of the arguments, e.g.:
   % /local/gardnerj/lsst/git/python_control/fullFocalplane.py \
   /local/gardnerj/lsst/trims/obsid99999999/metadata_99999999.dat \
   /local/gardnerj/lsst/git/python_control/exampleConfig_workstation.cfg \
@@ -185,6 +185,21 @@ IMPORTANT: When something goes wrong, try looking in the logs, as
 
 
 ==========================
+SIMPLE TEST RUN
+==========================
+Included in the source is a small test trimfile/catalog in
+testdata/obsid99999999 that is designed to run only a few
+minutes per chip.  To run this:
+  1. cd to source directory
+  2. Edit exampleConfig_workstation.cfg to set the paths to
+     something that makes sense for your system and save it
+     to MyTestConfig.cfg.
+  3. run:
+
+ fullFocalplane.py testdata/obsid99999999/metadata_99999999.dat MyTestConfig.cfg -c clouds_nobackground
+
+
+==========================
 FILE VERIFICATION
 ==========================
 
@@ -201,6 +216,19 @@ the fitsverify step by invoking onechip.py with '--no_fitsverify'.
 
 File verification is done via the classes in PhosimVerifier.py.
 Eventually, Jeff will write an updated wrapper script for it.
+
+==========================
+MINIMIZING DATA TRANSFER
+==========================
+
+If you are running on a platform that has limited I/O bandwidth,
+you may wish to calculate the atmosphere screen as part of the
+raytrace step, rather than in preprocessing.  This increases
+the runtime of the raytrace by only a minute or so, but with
+the advantage that you save about 250MB in data transfer.
+
+Do calculate atmosphere screens as part of the raytrace step, execute
+fullFocalPlane with the --skip_atmoscreens (or -a) option.
 
 
 ===============================

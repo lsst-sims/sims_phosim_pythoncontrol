@@ -290,6 +290,7 @@ class Preprocessor(PhosimManager):
 
     TODO(gardnerj): Modify phosim so that it returns success/failure.
     """
+    print os.getcwd()
     logger.info('Calling LoadInstanceCatalog(%s, %s).', self.instance_catalog,
                  self.extra_commands)
     self.focalplane.LoadInstanceCatalog(self.instance_catalog, self.extra_commands)

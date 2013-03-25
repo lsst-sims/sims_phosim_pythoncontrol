@@ -200,6 +200,13 @@ def main(trimfile, imsim_config_file, extra_commands, skip_atmoscreens,
 
   # print 'Using Imsim/Phosim version', phosim_version
   logger.info('Using Imsim/Phosim version %s', phosim_version)
+  # Must pass absolute paths to imsim/phosim workers
+  if not os.path.isabs(trimfile):
+    trimfile = os.path.abspath(trimfile)
+  if not os.path.isabs(imsim_config_file):
+    imsim_config_file = os.path.abspath(imsim_config_file)
+  if not os.path.isabs(extra_commands):
+    extra_commands = os.path.abspath(extra_commands)
   scheduler = policy.get('general','scheduler2')
   if version.LooseVersion(phosim_version) < version.LooseVersion('3.1.0'):
     if len(sensor_ids.split('|')) > 1:
