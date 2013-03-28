@@ -8,16 +8,14 @@ import PhosimManager
 import PhosimUtil
 import ScriptWriter
 
-def SetMockConfigContents(cfg, tmpdir, regen_atmoscreens=False,
-                          zip_rawfiles=True, scheduler2='csh'):
+def SetMockConfigContents(cfg, tmpdir, zip_rawfiles=True, scheduler2='csh'):
   """Sets mock config file vars and returns a dictionary of their settings."""
   cfg_dict = {
     'phosim_version': '_test_phosim_version',
     'python_exec': '_test_python_exec',
     'scheduler2': scheduler2,
     'debug_level': '2',
-    'regen_atmoscreens': regen_atmoscreens,
-    'regen_atmoscreens': zip_rawfiles,
+    'zip_rawfiles': zip_rawfiles,
     'log_stdout': True,
     'scratch_exec_path': os.path.join(tmpdir, 'exec'),
     'save_path': os.path.join(tmpdir, 'output'),
@@ -91,7 +89,7 @@ class PhosimManagerTest(BasePhosimManagerTest):
     self.assertEquals(self.cfg_dict['scratch_exec_path'], mgr.scratch_exec_path)
     self.assertEquals(self.cfg_dict['save_path'], mgr.save_path)
     self.assertEquals(self.cfg_dict['stage_path'], mgr.stage_path)
-    self.assertEquals(self.cfg_dict['regen_atmoscreens'], mgr.regen_atmoscreens)
+    self.assertEquals(self.cfg_dict['use_shared_datadir'], mgr.use_shared_datadir)
 
   def testUpdatePhosimDirsInPars(self):
     mgr = PhosimManager.PhosimManager(
@@ -150,7 +148,7 @@ class PhosimPreprocessorTest(BasePhosimManagerTest):
     self.assertEquals(self.cfg_dict['scratch_exec_path'], mgr.scratch_exec_path)
     self.assertEquals(self.cfg_dict['save_path'], mgr.save_path)
     self.assertEquals(self.cfg_dict['stage_path'], mgr.stage_path)
-    self.assertEquals(self.cfg_dict['regen_atmoscreens'], mgr.regen_atmoscreens)
+    self.assertEquals(self.cfg_dict['use_shared_datadir'], mgr.use_shared_datadir)
     self.assertEquals(mgr.observation_id, '12345')
     self.assertEquals(mgr.filter_num, '1')
 

@@ -13,9 +13,9 @@ import os
 import zipfile
 
 import Exposure
-import phosim
 import PhosimManager
 import PhosimUtil
+import phosim
 
 __author__ = 'Jeff Gardner (gardnerj@phys.washington.edu)'
 
@@ -177,8 +177,10 @@ class RaytraceVerifier(PhosimVerifier):
       save_path = os.path.join(self.my_save_path, dest_path)
       zip_fullpath = os.path.join(save_path, PhosimUtil.ZipNameFromRaw(dest_fns[0]))
       if self.IsFile(zip_fullpath):
+        logger.info('Found raw zip file %s', zip_fullpath)
         missing_files = self._VerifyRawInZip(zip_fullpath, dest_fns)
       else:
+        logger.info('Did not find raw zip file %s', zip_fullpath)
         missing_files = self._VerifyRaw(save_path, dest_fns)
     return missing_files
 
@@ -309,4 +311,3 @@ class PreprocVerifier(PhosimVerifier):
       missing_files.extend(self._VerifyFileInListAndDir(exec_fn, exec_files,
                                                         dirname=self.my_output_path))
     return missing_files
-
