@@ -694,7 +694,7 @@ class Raytracer(PhosimManager):
     dest_path, dest_fns = exposure.generateRawOutputNames(ampList=amp_list)
     dest_path = self._PrependAndCreateFullSavePath(dest_path)
     src_fns = exposure.generateRawExecNames(ampList=amp_list)
-    zip_name = os.path.join(dest_path, PhosimUtil.ZipNameFromRaw(src_fns[0]))
+    zip_name = os.path.join(dest_path, PhosimUtil.ZipNameFromRaw(dest_fns[0]))
     zipf = zipfile.ZipFile(zip_name, 'w', zipfile.ZIP_STORED)
     for src_fn, dest_fn in zip(src_fns, dest_fns):
       src = os.path.join(self.phosim_output_dir, src_fn)
