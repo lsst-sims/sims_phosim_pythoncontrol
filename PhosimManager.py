@@ -365,7 +365,8 @@ class Preprocessor(PhosimManager):
     assert self.skip_atmoscreens is not None
     os.chdir(self.phosim_work_dir)
     archives = []
-    archives.append(self._ArchiveParsByExt(pars_archive_name, skip_atmoscreens))
+    archives.append(self._ArchiveParsByExt(self.pars_archive_name,
+                                           self.skip_atmoscreens))
     archives.extend(self._ArchiveExecScriptsByExt(exec_archive_name))
     archives.append(self.imsim_config_file)
     os.chdir(self.my_exec_path)

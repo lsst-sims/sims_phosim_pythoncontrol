@@ -390,7 +390,7 @@ class ManifestParser(object):
     if fn.endswith('.csh') or fn.endswith('.pbs'):
       return 'exec'
     elif (fn.endswith('.tar') or fn.endswith('.tgz') or fn.endswith('.tar.gz') or
-          fn.endswith('.zip')):
+          fn.endswith('.zip') or fn.endswith('.ear')):
       return 'archive'
     elif fn.endswith('.cfg'):
       return 'config'
@@ -410,5 +410,3 @@ class ManifestParser(object):
       manifest_fp = self.manfp
     writer = csv.writer(manifest_fp)
     writer.writerows(list_2d)
-
-
