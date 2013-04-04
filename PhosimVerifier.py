@@ -49,15 +49,36 @@ class PhosimVerifier(object):
     zipf.close()
     return contents
 
+  def _StripExt(self, fn, ext):
+    """If 'fn' has extension 'ext', strip it.  Returns fn with ext removed."""
+    if fn.endswith(ext):
+      return fn.rsplit(ext, 1)[0]
+    return fn
+
   def _VerifyFileInDir(self, dirname, fn):
-    if self.IsFile(os.path.join(dirname, fn)):
+    """Verifies 'fn' is in directory 'dirname' (can also be gzipped)"""
+    if (self.IsFile(os.path.join(dirname, fn)) or
+        self.IsFile(os.path.join(dirname, self._StripExt(fn, '.gz'))) or
+        self.isFile(os.path.join(dirname, '%s.gz' % fn))):
       return []
     logging.warning('Verification failure: File %s is not in directory %s.',
                     fn, dirname)
     return [os.path.join(dirname, fn)]
 
   def _VerifyFileInListAndDir(self, fn, fn_list, dirname=None):
-    if fn not in fn_list:
+    """Verifies 'fn' is in list 'fn_list' and optionally directory 'dirname'.
+
+    Strips '.gz.' extension before comparison.
+
+    Args:
+      fn:   Filename
+      fn_list: List of filenames
+      dirname: Name of directory.
+
+    Returns:
+      List of missing files."""
+    if (self._StripExt(fn, '.gz') not in
+        map(lambda fn: self._StripExt(fn, '.gz'), fn_list)):
       logging.warning('Verification failure: File %s is not in list %s.',
                       fn, fn_list)
       return [fn]
