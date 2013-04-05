@@ -59,7 +59,7 @@ class PhosimVerifier(object):
     """Verifies 'fn' is in directory 'dirname' (can also be gzipped)"""
     if (self.IsFile(os.path.join(dirname, fn)) or
         self.IsFile(os.path.join(dirname, self._StripExt(fn, '.gz'))) or
-        self.isFile(os.path.join(dirname, '%s.gz' % fn))):
+        self.IsFile(os.path.join(dirname, '%s.gz' % fn))):
       return []
     logging.warning('Verification failure: File %s is not in directory %s.',
                     fn, dirname)
@@ -101,7 +101,7 @@ class PhosimVerifier(object):
 
 class RaytraceVerifier(PhosimVerifier):
   def __init__(self, imsim_config_file, observation_id, cid, eid,
-               my_save_path=None, manifest_fullpath=None,
+               my_save_path=None, my_exec_path=None, manifest_fullpath=None,
                manifest_parser_class=PhosimUtil.ManifestParser,
                instr_dir=None):
     """Constructor.
@@ -112,6 +112,7 @@ class RaytraceVerifier(PhosimVerifier):
       cid:            Chip ID.
       eid:            Exposure ID.
       my_save_path:   Use path other than save_path in imsim_config_file.
+      my_exec_path:   Use path other than scratch_exec_path/fid
       manifest_fullpath: Use file other than stage_path/manifest.txt
       manifest_parser_class: Use alternate class to parse manifest file.
       instr_dir:      Use path other than scratch_exec_path/fid/data/instrument.
@@ -127,7 +128,10 @@ class RaytraceVerifier(PhosimVerifier):
       self.manifest_fullpath = os.path.join(self.stage_path, self.observation_id,
                                             PhosimManager.MANIFEST_FN)
     self.my_save_path = my_save_path if my_save_path else self.save_path
-    self.my_exec_path = os.path.join(self.scratch_exec_path, self.fid)
+    if my_exec_path:
+      self.my_exec_path = my_exec_path
+    else:
+      self.my_exec_path = os.path.join(self.scratch_exec_path, self.fid)
     self._LoadParamsFromManifest()
     self.phosim_data_dir = os.path.join(self.my_exec_path, 'data')
     self.phosim_output_dir = os.path.join(self.my_exec_path, 'output')

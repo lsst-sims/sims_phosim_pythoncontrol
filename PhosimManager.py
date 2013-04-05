@@ -652,7 +652,7 @@ class Raytracer(PhosimManager):
       logger.info('Updating directories in %s' % self.my_raytrace_pars)
       self.UpdatePhosimDirsInPars(self.my_raytrace_pars)
     else:
-      raise OSError('Could not find file %s.' % pars_fn)
+      raise OSError('Could not find file %s.' % self.my_raytrace_pars)
     if os.path.isfile(self.my_e2adc_pars):
       logger.info('Updating directories in %s' % self.my_e2adc_pars)
       self.UpdatePhosimDirsInPars(self.my_e2adc_pars)
